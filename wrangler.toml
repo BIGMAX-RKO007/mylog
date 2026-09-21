@@ -3,14 +3,9 @@ main = "src/index.tsx"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# D1 关系型数据库绑定
+# D1 关系型数据库绑定 (生产与本地通用)
 [[d1_databases]]
 binding = "DB"
 database_name = "mylog-db"
-database_id = "local-mylog-db"
+database_id = "6f65ca18-88ba-4b4c-88c9-a2c27628456a"
 migrations_dir = "migrations"
-
-# R2 对象存储桶绑定
-[[r2_buckets]]
-binding = "STORAGE"
-bucket_name = "mylog-storage"

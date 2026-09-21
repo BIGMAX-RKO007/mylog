@@ -6,7 +6,7 @@ import { D1UserRepository } from './modules/iam/infrastructure/d1-user-repositor
 import { D1RbacRepository } from './modules/iam/infrastructure/d1-rbac-repository';
 import { AuthenticateUserUseCase } from './modules/iam/application/authenticate-user';
 import { CheckPermissionUseCase } from './modules/iam/application/check-permission';
-import { R2StorageAdapter } from './modules/document/infrastructure/r2-storage-adapter';
+import { D1StorageAdapter } from './modules/document/infrastructure/d1-storage-adapter';
 import { D1DocumentRepository } from './modules/document/infrastructure/d1-document-repository';
 import { CommitDocumentUseCase } from './modules/document/application/commit-document';
 import { GetDocumentUseCase } from './modules/document/application/get-document';
@@ -36,20 +36,20 @@ app.use('*', async (c, next) => {
   const d1RbacRepo = new D1RbacRepository(c.env.DB);
   const d1DocRepo = new D1DocumentRepository(c.env.DB);
   const categoryRepo = new D1CategoryRepository(c.env.DB);
-  const r2Storage = new R2StorageAdapter(c.env.STORAGE);
+  const d1Storage = new D1StorageAdapter(c.env.DB);
 
   const authUseCase = new AuthenticateUserUseCase(d1UserRepo, d1RbacRepo);
   const checkPermissionUseCase = new CheckPermissionUseCase(d1RbacRepo);
-  const commitDocUseCase = new CommitDocumentUseCase(r2Storage, d1DocRepo, globalEventBus);
-  const getDocUseCase = new GetDocumentUseCase(r2Storage, d1DocRepo, checkPermissionUseCase);
-  const deleteDocUseCase = new DeleteDocumentUseCase(r2Storage, d1DocRepo, checkPermissionUseCase);
+  const commitDocUseCase = new CommitDocumentUseCase(d1Storage, d1DocRepo, globalEventBus);
+  const getDocUseCase = new GetDocumentUseCase(d1Storage, d1DocRepo, checkPermissionUseCase);
+  const deleteDocUseCase = new DeleteDocumentUseCase(d1Storage, d1DocRepo, checkPermissionUseCase);
 
   c.set('services', {
     d1UserRepo,
     d1RbacRepo,
     docRepo: d1DocRepo,
     categoryRepo,
-    storage: r2Storage,
+    storage: d1Storage,
     authUseCase,
     checkPermissionUseCase,
     commitDocUseCase,
