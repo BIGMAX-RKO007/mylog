@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Cloudflare Wrangler local state & builds
+.wrangler/
+dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Test coverage & outputs
+coverage/
+
+# OS metadata
+.DS_Store
+Thumbs.db
