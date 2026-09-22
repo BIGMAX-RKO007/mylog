@@ -6,24 +6,32 @@ export interface ExtractedMetadata {
 }
 
 export class MetadataExtractor {
+  // 常见主流技术/领域关键词识别库（用于无 AI 时的智能启发式提取）
+  private static readonly TECH_KEYWORDS = [
+    'HTMX', 'Markdown', 'AI', 'Agent', 'Zero', 'Cloudflare', 'D1', 'R2', 'Workers',
+    'Docker', 'K8s', 'Kubernetes', 'Linux', 'Nginx', 'Rust', 'Go', 'Golang',
+    'Python', 'JavaScript', 'TypeScript', 'React', 'Vue', 'Next.js', 'Hono',
+    'SQL', 'SQLite', 'PostgreSQL', 'MySQL', 'Redis', 'RBAC', '安全', '运维',
+    '算法', '数学', '物理', '微积分', '情感', '心理', '系统设计', '排坑', '架构'
+  ];
+
   /**
-   * 极速解析 Markdown YAML Frontmatter (0 Token, 0 延迟)
+   * 鲁棒解析 Markdown YAML Frontmatter (兼容 \r\n, \n, 空格与不同数组写法)
    */
   static parseFrontmatter(markdown: string): { frontmatter: Record<string, any>; cleanBody: string } | null {
-    if (!markdown.startsWith('---')) {
+    if (!markdown) return null;
+
+    // 匹配前导空白后由 --- 包裹的 Frontmatter
+    const match = markdown.match(/^\s*---\r?\n([\s\S]*?)\r?\n---\s*(?:\r?\n|$)/);
+    if (!match) {
       return null;
     }
 
-    const endIdx = markdown.indexOf('\n---', 3);
-    if (endIdx === -1) {
-      return null;
-    }
-
-    const frontmatterRaw = markdown.slice(3, endIdx).trim();
-    const cleanBody = markdown.slice(endIdx + 4).trim();
+    const frontmatterRaw = match[1].trim();
+    const cleanBody = markdown.slice(match[0].length).trim();
 
     const result: Record<string, any> = {};
-    const lines = frontmatterRaw.split('\n');
+    const lines = frontmatterRaw.split(/\r?\n/);
 
     for (const line of lines) {
       const colonIdx = line.indexOf(':');
@@ -32,16 +40,15 @@ export class MetadataExtractor {
       const key = line.slice(0, colonIdx).trim().toLowerCase();
       let val = line.slice(colonIdx + 1).trim();
 
-      // 处理数组格式: [a, b, c] 或 "a, b"
+      // 处理数组: [a, b, c] 或列表
       if (val.startsWith('[') && val.endsWith(']')) {
         const items = val
           .slice(1, -1)
-          .split(',')
+          .split(/[,，]/)
           .map((s) => s.trim().replace(/^["']|["']$/g, ''))
           .filter(Boolean);
         result[key] = items;
       } else {
-        // 去除外层引号
         val = val.replace(/^["']|["']$/g, '');
         result[key] = val;
       }
@@ -51,22 +58,66 @@ export class MetadataExtractor {
   }
 
   /**
-   * 双轨制元数据提取：
-   * 1. 优先快车道：解析 YAML Frontmatter
-   * 2. 辅道兜底：调用 Workers AI (Llama 3.1) 结构化提取
+   * 启发式智能关键词与标签提取 (当没有 Frontmatter 且 AI 不可用时的动态提取算法)
+   */
+  static extractHeuristic(markdown: string): { tags: string[]; summary: string } {
+    const lines = markdown.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const firstLine = lines[0] || '';
+    const contentSample = markdown.slice(0, 1500);
+
+    // 1. 扫描匹配知名技术/主题关键词 (不区分大小写)
+    const matchedTags: string[] = [];
+    for (const kw of this.TECH_KEYWORDS) {
+      const regex = new RegExp(`\\b${kw}\\b`, 'i');
+      if (regex.test(contentSample) && !matchedTags.includes(kw)) {
+        matchedTags.push(kw);
+        if (matchedTags.length >= 3) break;
+      }
+    }
+
+    // 2. 若未匹配到已知库，从第一行标题切取有效词
+    if (matchedTags.length === 0) {
+      const cleanTitle = firstLine.replace(/^[#\s\-_*]+/, '').trim();
+      const chunks = cleanTitle.split(/[\s,，、—\-_/]+/).filter((s) => s.length >= 2 && s.length <= 8);
+      if (chunks.length > 0) {
+        matchedTags.push(...chunks.slice(0, 2));
+      } else {
+        matchedTags.push('知识经验');
+      }
+    }
+
+    // 3. 提炼一句话核心摘要 (从正文第 1~3 行清理 markdown 符号后抽取)
+    const bodyLines = lines.filter((l) => !l.startsWith('#')).slice(0, 3);
+    let summary = bodyLines.join(' ').replace(/[#*`_~>]/g, '').trim();
+    if (!summary || summary.length < 10) {
+      summary = lines.slice(0, 2).join(' ').replace(/[#*`_~>]/g, '').trim();
+    }
+    summary = summary.slice(0, 80);
+
+    return {
+      tags: matchedTags.slice(0, 3),
+      summary: summary || '暂无详细摘要',
+    };
+  }
+
+  /**
+   * 双轨制元数据提取核心入口：
+   * 1. 快车道：YAML Frontmatter 0 Token 瞬时提取
+   * 2. 辅道：Workers AI 结构化提炼
+   * 3. 动态启发式兜底：智能分析标题与正文关键词 (绝不死板打硬编码标签)
    */
   static async extract(
     markdown: string,
     aiBinding?: any
   ): Promise<ExtractedMetadata> {
-    // 1. 快车道 (Fast Track)
+    // 1. 快车道 (Fast Track: YAML Frontmatter)
     const parsedFm = this.parseFrontmatter(markdown);
     if (parsedFm && (parsedFm.frontmatter.tags || parsedFm.frontmatter.summary)) {
       let rawTags: string[] = [];
       if (Array.isArray(parsedFm.frontmatter.tags)) {
         rawTags = parsedFm.frontmatter.tags;
       } else if (typeof parsedFm.frontmatter.tags === 'string') {
-        rawTags = parsedFm.frontmatter.tags.split(',').map((s) => s.trim());
+        rawTags = parsedFm.frontmatter.tags.split(/[,，]/).map((s) => s.trim());
       }
 
       return {
@@ -77,7 +128,7 @@ export class MetadataExtractor {
       };
     }
 
-    // 2. 辅道兜底 (Workers AI Fallback)
+    // 2. 辅道 (Workers AI 结构化提炼)
     if (aiBinding && typeof aiBinding.run === 'function') {
       try {
         const preview = markdown.slice(0, 1500);
@@ -88,40 +139,39 @@ export class MetadataExtractor {
 笔记内容：
 ${preview}`;
 
+        // 优先使用当前通用模型
         const aiResponse = await aiBinding.run('@cf/qwen/qwen1.5-7b-chat', {
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 150,
         }).catch(() => {
-          return aiBinding.run('@cf/meta/llama-3-8b-instruct', {
+          return aiBinding.run('@cf/meta/llama-3.1-8b-instruct', {
             messages: [{ role: 'user', content: prompt }],
             max_tokens: 150,
           });
         });
 
-
         const rawText: string = aiResponse?.response || '';
-        // 提取 JSON
         const jsonMatch = rawText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
-          return {
-            tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 3) : [],
-            summary: typeof parsed.summary === 'string' ? parsed.summary.trim() : undefined,
-            isFrontmatterParsed: false,
-          };
+          if (Array.isArray(parsed.tags) && parsed.tags.length > 0) {
+            return {
+              tags: parsed.tags.slice(0, 3),
+              summary: typeof parsed.summary === 'string' ? parsed.summary.trim() : undefined,
+              isFrontmatterParsed: false,
+            };
+          }
         }
       } catch (err) {
-        console.warn('Workers AI extraction fallback error:', err);
+        console.warn('Workers AI extraction fallback to heuristic:', err);
       }
     }
 
-    // 3. 极速纯文本启发式兜底 (若未配置 AI 或 AI 超时)
-    const firstLines = markdown.split('\n').filter((l) => l.trim().length > 0);
-    const summary = firstLines.slice(1, 3).join(' ').replace(/[#*`_]/g, '').slice(0, 80);
-
+    // 3. 动态启发式关键词提取兜底 (即使没有 AI，也能根据内容生成精准的标签)
+    const heuristic = this.extractHeuristic(markdown);
     return {
-      tags: ['知识沉淀'],
-      summary: summary || '未提供摘要的 Markdown 笔记',
+      tags: heuristic.tags,
+      summary: heuristic.summary,
       isFrontmatterParsed: false,
     };
   }

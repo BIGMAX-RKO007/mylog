@@ -22,16 +22,23 @@ verified: true
     expect(result.summary).toBe('解决 D1 在本地与生产环境因外键约束顺序导致的迁移死锁问题');
   });
 
-  it('没有 Frontmatter 时应优雅降级为纯文本启发式提取', async () => {
-    const rawMarkdown = `# 快速排查记录
-今天在服务器上配置了 Nginx 代理，遇到了 502 错误。
-通过检查 upstream 端口解决了问题。`;
+  it('没有 Frontmatter 时应智能从标题和内容中启发式提取关键标签', async () => {
+    const rawMarkdown1 = `# 构建基于 HTMX 与 Markdown 的个人 AI 知识库与 Agent
+在 AI 时代，.md 文件凭借其独特的优势，成为了连接人类与大模型之间的通用语。`;
 
-    const result = await MetadataExtractor.extract(rawMarkdown);
-    expect(result.isFrontmatterParsed).toBe(false);
-    expect(result.tags).toContain('知识沉淀');
-    expect(result.summary).toBeDefined();
+    const result1 = await MetadataExtractor.extract(rawMarkdown1);
+    expect(result1.isFrontmatterParsed).toBe(false);
+    expect(result1.tags).toContain('HTMX');
+    expect(result1.tags).toContain('Markdown');
+
+    const rawMarkdown2 = `# Zero与AI Agent编程语言综述
+Zero 是 Vercel Labs 于 2026 年发布的实验性系统级编程语言...`;
+
+    const result2 = await MetadataExtractor.extract(rawMarkdown2);
+    expect(result2.tags).toContain('Zero');
+    expect(result2.tags).toContain('Agent');
   });
+
 });
 
 describe('TagNormalizer (标签规范化与收敛漏斗)', () => {
