@@ -133,9 +133,26 @@ app.get('/api/health-infra', async (c) => {
   } else {
     try {
       const describeRes = await c.env.TAG_VECTORS.describe();
+      let mutationTest: any = null;
+      let queryTest: any = null;
+
+      // 如果带有 ?testMutation=true，触发端到端写入和检索测试
+      const testMutation = c.req.query('testMutation');
+      if (testMutation === 'true' && report.workersAi?.status === 'healthy') {
+        const embed = await c.env.AI.run('@cf/baai/bge-base-en-v1.5', { text: ['test-infra'] });
+        const vector = embed?.data?.[0];
+        if (vector) {
+          mutationTest = await c.env.TAG_VECTORS.upsert([
+            { id: 'infra-health-probe', values: vector, namespace: 'tags' },
+          ]);
+          queryTest = await c.env.TAG_VECTORS.query(vector, { topK: 1 });
+        }
+      }
+
       report.vectorize = {
         status: 'healthy',
         details: describeRes,
+        ...(mutationTest ? { mutationTest, queryTest } : {}),
       };
     } catch (err: any) {
       report.vectorize = { status: 'error', message: err.message || String(err) };

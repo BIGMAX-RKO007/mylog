@@ -96,11 +96,11 @@ export class TagNormalizer {
 
           // 若无高相似度，将新标签向量存入 Vectorize
           console.log(`📐 [Vectorize] 正在将全新领域标签 "${cleaned}" 向量写入云端索引...`);
-          await vectorizeBinding.insert([
+          await vectorizeBinding.upsert([
             {
               id: cleaned,
               values: vector,
-              metadata: { name: cleaned },
+              namespace: 'tags',
             },
           ]);
         }
