@@ -118,28 +118,10 @@ export const UploadPreviewCard: FC<UploadPreviewProps> = ({ fileName, parsed, up
       >
         <input type="hidden" name="uploadToken" value={uploadToken} />
 
-        <div style="background-color: var(--bg-tertiary); padding: 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 1rem;">
-          <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.35rem;">
-            📂 选择文档归属分类：
-          </label>
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.5rem;">
-            支持一级或二级分类。如果未选择，系统将自动归入「未分类」。
-          </div>
-          <select name="categoryId" class="form-control" style="width: 100%;">
-            <option value="cat_uncategorized">📁 未分类 (默认)</option>
-            {categories.map(cat => (
-              cat.children && cat.children.length > 0 ? (
-                <optgroup label={`📂 ${cat.name}`} key={cat.id}>
-                  <option value={cat.id}>📂 {cat.name} (一级分类)</option>
-                  {cat.children.map(sub => (
-                    <option value={sub.id} key={sub.id}>&nbsp;&nbsp;↳ 🏷️ {sub.name} (二级分类)</option>
-                  ))}
-                </optgroup>
-              ) : (
-                <option value={cat.id} key={cat.id}>📂 {cat.name}</option>
-              )
-            ))}
-          </select>
+        <input type="hidden" name="categoryId" value="cat_uncategorized" />
+        <div style="background-color: var(--bg-tertiary); padding: 0.75rem 0.85rem; border-radius: var(--radius-sm); border: 1px solid var(--border-color); margin-bottom: 1rem; font-size: 0.8rem; color: var(--text-secondary); display: flex; align-items: center; gap: 0.5rem;">
+          <span>🏷️</span>
+          <span>系统将优先提取 YAML Frontmatter 标签；无标签时自动由 Workers AI 提炼核心主题标签并向量化聚类。</span>
         </div>
 
         {/* 操作按钮区 */}

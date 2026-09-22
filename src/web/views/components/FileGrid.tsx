@@ -121,11 +121,12 @@ export const FileGrid: FC<FileGridProps> = ({ files }) => {
             {/* 卡片底栏：四角平滑内嵌元数据 */}
             <div class="card-footer-row">
               <div class="footer-left-group">
-                <span class="category-chip">
-                  <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
-                    <path d="M1.5 3A1.5 1.5 0 0 0 0 4.5v7A1.5 1.5 0 0 0 1.5 13h13a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H7.707l-1.854-1.854A.5.5 0 0 0 5.5 2.5h-4z" />
+                <span class="card-date-chip" style="display: inline-flex; align-items: center; gap: 0.25rem; font-size: 0.72rem; color: var(--text-muted);">
+                  <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
                   </svg>
-                  <span>{file.parentCategoryName ? `${file.parentCategoryName} / ${file.categoryName}` : (file.categoryName || '未分类')}</span>
+                  <span>{formatDate(file.createdAt)}</span>
                 </span>
 
                 <div class="card-views" title="累计阅读与点击量">

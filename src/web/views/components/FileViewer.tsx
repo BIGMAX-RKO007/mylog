@@ -24,14 +24,6 @@ export const FileViewer: FC<FileViewerProps> = ({ metadata, parsed, isOwner }) =
           <span>返回大厅网格</span>
         </a>
         <div style="display: flex; gap: 0.65rem; align-items: center;">
-          {metadata.categoryName && (
-            <span class="category-chip">
-              <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
-                <path d="M1.5 3A1.5 1.5 0 0 0 0 4.5v7A1.5 1.5 0 0 0 1.5 13h13a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H7.707l-1.854-1.854A.5.5 0 0 0 5.5 2.5h-4z" />
-              </svg>
-              <span>{metadata.parentCategoryName ? `${metadata.parentCategoryName} / ${metadata.categoryName}` : metadata.categoryName}</span>
-            </span>
-          )}
           <span class="card-views" style="font-size: 0.85rem;">
             <svg class="fire-vector-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M12 2C10.5 4.5 9 6.8 9 9.5C9 12.8 11.2 14.5 12 15C12.8 14.5 15 12.8 15 9.5C15 6.8 13.5 4.5 12 2Z" fill="#f97316"/>

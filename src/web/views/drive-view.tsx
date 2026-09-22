@@ -106,16 +106,6 @@ export const DriveView: FC<DrivePageProps> = ({
     );
   }
 
-  // 计算当前选中的一级分类
-  const activeL1 = categories.find(
-    (cat) => cat.id === selectedCategoryId || (cat.children && cat.children.some((sub) => sub.id === selectedCategoryId))
-  );
-
-  const activeCategoryName = activeL1
-    ? (selectedCategoryId === activeL1.id
-        ? activeL1.name
-        : activeL1.children.find((c) => c.id === selectedCategoryId)?.name || activeL1.name)
-    : '全部分类';
 
   return (
     <div id="drive-main-container" class="bento-app-container">
@@ -252,82 +242,7 @@ export const DriveView: FC<DrivePageProps> = ({
             </div>
           )}
 
-          {/* 一级分类横向滚动胶囊条 (Mobile-friendly horizontal ribbon) */}
-          <div class="category-scroll-ribbon">
-            <a
-              href={`/?sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
-              class={`category-ribbon-pill ${!selectedCategoryId ? 'active' : ''}`}
-              hx-get={`/?sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
-              hx-target="#drive-main-container"
-              hx-swap="outerHTML"
-              hx-push-url="true"
-            >
-              <span class="ribbon-icon">✨</span>
-              <span>全部分类</span>
-            </a>
-
-            {categories.map((cat) => {
-              const isSelected = activeL1?.id === cat.id;
-              return (
-                <a
-                  key={cat.id}
-                  href={`/?categoryId=${cat.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
-                  class={`category-ribbon-pill ${isSelected ? 'active' : ''}`}
-                  hx-get={`/?categoryId=${cat.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
-                  hx-target="#drive-main-container"
-                  hx-swap="outerHTML"
-                  hx-push-url="true"
-                >
-                  <span class="ribbon-icon">📁</span>
-                  <span>{cat.name}</span>
-                </a>
-              );
-            })}
-
-            {session && (
-              <button
-                class="category-add-pill"
-                title="新建与维护分类"
-                hx-get="/categories/modal"
-                hx-target="#modal-container"
-                hx-swap="innerHTML"
-              >
-                <span>+ 分类管理</span>
-              </button>
-            )}
-          </div>
-
-          {/* 二级子分类行 (智能展开) */}
-          {activeL1 && activeL1.children && activeL1.children.length > 0 && (
-            <div class="sub-ribbon-container">
-              <span class="sub-ribbon-hint">{activeL1.name} 子分类：</span>
-              <a
-                href={`/?categoryId=${activeL1.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
-                class={`sub-chip ${selectedCategoryId === activeL1.id ? 'active' : ''}`}
-                hx-get={`/?categoryId=${activeL1.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
-                hx-target="#drive-main-container"
-                hx-swap="outerHTML"
-                hx-push-url="true"
-              >
-                全部
-              </a>
-              {activeL1.children.map((sub) => (
-                <a
-                  key={sub.id}
-                  href={`/?categoryId=${sub.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
-                  class={`sub-chip ${selectedCategoryId === sub.id ? 'active' : ''}`}
-                  hx-get={`/?categoryId=${sub.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
-                  hx-target="#drive-main-container"
-                  hx-swap="outerHTML"
-                  hx-push-url="true"
-                >
-                  {sub.name}
-                </a>
-              ))}
-            </div>
-          )}
-
-          {/* 热门智能标签横向胶囊墙 */}
+          {/* 热门智能标签横向胶囊墙 (知识库主维度) */}
           {popularTags && popularTags.length > 0 && (
             <div class="tags-ribbon-container">
               <span class="tags-ribbon-hint">
@@ -340,10 +255,10 @@ export const DriveView: FC<DrivePageProps> = ({
 
               {selectedTag && (
                 <a
-                  href={`/?categoryId=${selectedCategoryId}&sort=${selectedSort}`}
+                  href={`/?sort=${selectedSort}`}
                   class="tag-pill-chip active-tag-pill"
                   title="点击取消此标签筛选"
-                  hx-get={`/?categoryId=${selectedCategoryId}&sort=${selectedSort}`}
+                  hx-get={`/?sort=${selectedSort}`}
                   hx-target="#drive-main-container"
                   hx-swap="outerHTML"
                   hx-push-url="true"
@@ -355,13 +270,13 @@ export const DriveView: FC<DrivePageProps> = ({
 
               {popularTags
                 .filter((pt) => pt.name !== selectedTag)
-                .slice(0, 12)
+                .slice(0, 15)
                 .map((pt) => (
                   <a
                     key={pt.name}
-                    href={`/?tag=${encodeURIComponent(pt.name)}&categoryId=${selectedCategoryId}&sort=${selectedSort}`}
+                    href={`/?tag=${encodeURIComponent(pt.name)}&sort=${selectedSort}`}
                     class="tag-pill-chip"
-                    hx-get={`/?tag=${encodeURIComponent(pt.name)}&categoryId=${selectedCategoryId}&sort=${selectedSort}`}
+                    hx-get={`/?tag=${encodeURIComponent(pt.name)}&sort=${selectedSort}`}
                     hx-target="#drive-main-container"
                     hx-swap="outerHTML"
                     hx-push-url="true"
@@ -373,11 +288,10 @@ export const DriveView: FC<DrivePageProps> = ({
             </div>
           )}
 
-
           {/* 状态统计与排序控制器 */}
           <div class="bento-filter-row">
             <div class="filter-row-left">
-              <span class="stage-tag">{activeCategoryName}</span>
+              <span class="stage-tag">{selectedTag ? `#${selectedTag}` : '全部知识库'}</span>
               <span class="doc-counter">共 <strong>{files.length}</strong> 篇文档</span>
             </div>
 

@@ -65,13 +65,21 @@ export class MetadataExtractor {
     const firstLine = lines[0] || '';
     const contentSample = markdown.slice(0, 1500);
 
-    // 1. 扫描匹配知名技术/主题关键词 (不区分大小写)
+    // 1. 文档本质类型优先判定 (如简历/求职/架构/手册等)
+    const isResume = /(?:简历|履历|求职|教育背景|工作经历|项目经验|resume|curriculum vitae)/i.test(firstLine + '\n' + contentSample);
     const matchedTags: string[] = [];
-    for (const kw of this.TECH_KEYWORDS) {
-      const regex = new RegExp(`\\b${kw}\\b`, 'i');
-      if (regex.test(contentSample) && !matchedTags.includes(kw)) {
-        matchedTags.push(kw);
-        if (matchedTags.length >= 3) break;
+    if (isResume) {
+      matchedTags.push('简历', '求职档案');
+    }
+
+    // 2. 扫描匹配知名技术/主题关键词 (不区分大小写)
+    if (matchedTags.length < 3) {
+      for (const kw of this.TECH_KEYWORDS) {
+        const regex = new RegExp(`\\b${kw}\\b`, 'i');
+        if (regex.test(contentSample) && !matchedTags.includes(kw)) {
+          matchedTags.push(kw);
+          if (matchedTags.length >= 3) break;
+        }
       }
     }
 
@@ -132,11 +140,11 @@ export class MetadataExtractor {
     if (aiBinding && typeof aiBinding.run === 'function') {
       try {
         const preview = markdown.slice(0, 1500);
-        const prompt = `你是一个专业知识库管理员。请分析以下技术笔记，提取 1~3 个核心技术/领域标签，并用一句话概括其核心结论或解决的问题。
-必须严格只返回 JSON 格式，不要包含任何 markdown 代码块标记或额外废话：
-{"tags": ["标签1", "标签2"], "summary": "30-50字的核心摘要"}
+        const prompt = `你是一个专业技术知识库管理员。请仔细阅读以下文档，提炼 1~3 个最能代表文档核心本质或主题的标签（例如若为简历则提炼"简历","求职档案"；若为系统设计则提炼"系统设计","架构"等，切忌盲目罗列正文中提到的编程语言名称），并撰写一句话（30-50字）的核心内容摘要。
+必须严格只返回 JSON 格式，不要包含任何 markdown 标记或额外废话：
+{"tags": ["主题标签1", "主题标签2"], "summary": "30-50字的核心内容摘要"}
 
-笔记内容：
+文档内容：
 ${preview}`;
 
         // 优先使用高响应速度的 Llama 3.2 3B，兜底使用 Llama 3.1 8B FP8
@@ -150,13 +158,25 @@ ${preview}`;
           });
         });
 
-        const rawText: string = aiResponse?.response || '';
+        // 兼容 Cloudflare Workers AI 自动解析 JSON 对象的场景
+        const resp = aiResponse?.response ?? aiResponse;
+        if (resp && typeof resp === 'object') {
+          if (Array.isArray(resp.tags) && resp.tags.length > 0) {
+            return {
+              tags: resp.tags.slice(0, 3).map((t: any) => String(t).trim()),
+              summary: typeof resp.summary === 'string' ? resp.summary.trim() : undefined,
+              isFrontmatterParsed: false,
+            };
+          }
+        }
+
+        const rawText = typeof resp === 'string' ? resp : JSON.stringify(resp || '');
         const jsonMatch = rawText.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
           const parsed = JSON.parse(jsonMatch[0]);
           if (Array.isArray(parsed.tags) && parsed.tags.length > 0) {
             return {
-              tags: parsed.tags.slice(0, 3),
+              tags: parsed.tags.slice(0, 3).map((t: any) => String(t).trim()),
               summary: typeof parsed.summary === 'string' ? parsed.summary.trim() : undefined,
               isFrontmatterParsed: false,
             };
