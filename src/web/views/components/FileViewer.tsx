@@ -126,11 +126,11 @@ verified: true
               <button
                 class="btn btn-sm btn-danger"
                 hx-delete={`/files/${metadata.id}`}
-                hx-confirm="确定要彻底从存储桶与数据库中删除此文档吗？"
+                hx-confirm={`确定要彻底从知识库中删除文档「${metadata.title || metadata.name}」吗？删除后将不可恢复。`}
                 hx-target="#drive-main-container"
-                hx-swap="innerHTML"
+                hx-swap="outerHTML"
               >
-                🗑️ 删除
+                🗑️ 删除文档
               </button>
             </>
           )}

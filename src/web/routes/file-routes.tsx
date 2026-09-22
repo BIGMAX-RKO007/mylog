@@ -68,7 +68,7 @@ fileRoutes.get('/files', async (c) => {
 
   const searchResult = await smartSearchUseCase.search(q, session?.userId, categoryId, tag, sort);
 
-  return c.html(<FileGrid files={searchResult.files} />);
+  return c.html(<FileGrid files={searchResult.files} session={session} />);
 });
 
 

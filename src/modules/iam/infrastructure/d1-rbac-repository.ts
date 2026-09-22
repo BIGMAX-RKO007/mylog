@@ -127,12 +127,19 @@ export class D1RbacRepository implements RbacRepositoryPort {
         FROM role_inheritance ri
         JOIN user_effective_roles uer ON ri.parent_role_id = uer.role_id
       )
+      -- 1. 管理员 (rol_admin) 拥有全局最高操作特权 (含 DELETE / OWNERSHIP)
+      SELECT 1 AS allowed
+      FROM user_effective_roles
+      WHERE role_id = 'rol_admin'
+      UNION
+      -- 2. 对象显式授权或拥有者特权
       SELECT 1 AS allowed
       FROM grants g
       WHERE g.object_id = ?
         AND (g.privilege = ? OR g.privilege = 'OWNERSHIP')
         AND g.role_id IN (SELECT role_id FROM user_effective_roles)
       UNION
+      -- 3. 公开可读
       SELECT 1 AS allowed
       FROM files f
       WHERE f.id = ? AND f.is_public = 1 AND ? = 'READ'

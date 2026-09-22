@@ -345,7 +345,7 @@ export const DriveView: FC<DrivePageProps> = ({
 
         {/* 3. 便当盒非对称卡片展示区 (Bento Box Grid) */}
         <section id="file-grid-container" class="bento-viewport">
-          <FileGrid files={files} />
+          <FileGrid files={files} session={session} />
         </section>
       </main>
 

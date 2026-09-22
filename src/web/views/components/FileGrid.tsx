@@ -1,8 +1,10 @@
 import { FC } from 'hono/jsx';
 import { DocumentMetadata } from '../../../modules/document/domain/types';
+import { UserSession } from '../../../core/types';
 
 interface FileGridProps {
   files: DocumentMetadata[];
+  session?: UserSession;
 }
 
 function formatBytes(bytes: number): string {
@@ -16,7 +18,7 @@ function formatDate(ms: number): string {
   return `${d.getMonth() + 1}月${d.getDate()}日`;
 }
 
-export const FileGrid: FC<FileGridProps> = ({ files }) => {
+export const FileGrid: FC<FileGridProps> = ({ files, session }) => {
   if (files.length === 0) {
     return (
       <div class="empty-state-card">
@@ -86,6 +88,25 @@ export const FileGrid: FC<FileGridProps> = ({ files }) => {
                     </svg>
                     私有
                   </span>
+                )}
+
+                {/* 登录用户展示快捷删除按钮 */}
+                {session && (
+                  <button
+                    type="button"
+                    class="card-delete-icon-btn"
+                    title="彻底删除此文档"
+                    onclick="event.stopPropagation(); event.preventDefault();"
+                    hx-delete={`/files/${file.id}`}
+                    hx-confirm={`确定要彻底删除文档「${file.title || file.name}」吗？删除后将不可恢复。`}
+                    hx-target="#drive-main-container"
+                    hx-swap="outerHTML"
+                  >
+                    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
+                  </button>
                 )}
               </div>
             </div>

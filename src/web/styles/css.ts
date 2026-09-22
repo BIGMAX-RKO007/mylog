@@ -680,6 +680,33 @@ body, .app-body {
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
+.card-delete-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  opacity: 0.65;
+}
+
+.bento-card:hover .card-delete-icon-btn {
+  opacity: 1;
+}
+
+.card-delete-icon-btn:hover {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.3);
+  transform: scale(1.12);
+}
+
 .card-body-content {
   margin-bottom: 1.25rem;
 }

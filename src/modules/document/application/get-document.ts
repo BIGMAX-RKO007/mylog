@@ -40,8 +40,8 @@ export class GetDocumentUseCase {
     // 4. 解析为带样式的 HTML 片段
     const parsed = MarkdownParser.parse(rawMarkdown, metadata.name);
 
-    // 5. 判定当前用户是否为拥有者 (拥有 OWNERSHIP 特权)
-    const isOwner = userId ? await this.checkPermission.canAccess(userId, fileId, 'OWNERSHIP') : false;
+    // 5. 判定当前用户是否拥有管理与删除权 (OWNERSHIP 特权或管理员 DELETE 特权)
+    const isOwner = userId ? await this.checkPermission.canAccess(userId, fileId, 'DELETE') : false;
 
     return ok({
       metadata,
