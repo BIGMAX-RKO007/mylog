@@ -59,18 +59,20 @@ export class SmartSearchUseCase {
 必须只返回逗号分隔的词语列表，不要输出任何其他文字或标点：
 例如输入 sql，输出：数据库,db,database,sqlite`;
 
+      console.log(`🤖 [Workers AI] 正在为用户搜索词 "${trimmedQuery}" 实时扩展同义词族...`);
       const aiRes = await this.aiBinding.run('@cf/qwen/qwen1.5-7b-chat', {
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 50,
       }).catch(() => {
-        return this.aiBinding.run('@cf/meta/llama-3-8b-instruct', {
+        return this.aiBinding.run('@cf/meta/llama-3.1-8b-instruct', {
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 50,
         });
       });
 
-
       const raw = aiRes?.response || '';
+      console.log(`🤖 [Workers AI] 意图推理返回原生结果:`, raw);
+
       expandedWords = raw
         .split(/[,，\n]/)
         .map((s: string) => s.trim().replace(/^["']|["']$/g, ''))
