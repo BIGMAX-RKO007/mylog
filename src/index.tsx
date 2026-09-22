@@ -85,6 +85,59 @@ app.route('/', fileRoutes);
 app.route('/', adminRbacRoutes);
 app.route('/', categoryRoutes);
 
+// 4. 基础设施健康与真机验证诊断接口 (用于确凿验证 AI 与 Vectorize)
+app.get('/api/health-infra', async (c) => {
+  const report: Record<string, any> = {
+    timestamp: new Date().toISOString(),
+    d1: 'unknown',
+    workersAi: 'unknown',
+    vectorize: 'unknown',
+  };
+
+  // 1. 验证 D1
+  try {
+    const d1Res = await c.env.DB.prepare('SELECT COUNT(*) as count FROM files').first<{ count: number }>();
+    report.d1 = { status: 'healthy', fileCount: d1Res?.count ?? 0 };
+  } catch (err: any) {
+    report.d1 = { status: 'error', message: err.message || String(err) };
+  }
+
+  // 2. 验证 Workers AI
+  if (!c.env.AI) {
+    report.workersAi = { status: 'missing_binding' };
+  } else {
+    try {
+      const embedTest = await c.env.AI.run('@cf/baai/bge-base-zh', { text: ['基础设施测试'] });
+      report.workersAi = {
+        status: 'healthy',
+        model: '@cf/baai/bge-base-zh',
+        outputKeys: Object.keys(embedTest || {}),
+        vectorDimensions: embedTest?.data?.[0]?.length || 0,
+      };
+    } catch (err: any) {
+      report.workersAi = { status: 'error', message: err.message || String(err) };
+    }
+  }
+
+  // 3. 验证 Vectorize 向量库
+  if (!c.env.TAG_VECTORS) {
+    report.vectorize = { status: 'missing_binding' };
+  } else {
+    try {
+      const describeRes = await c.env.TAG_VECTORS.describe();
+      report.vectorize = {
+        status: 'healthy',
+        details: describeRes,
+      };
+    } catch (err: any) {
+      report.vectorize = { status: 'error', message: err.message || String(err) };
+    }
+  }
+
+  return c.json(report);
+});
+
+
 // 全局异常捕获
 app.onError((err, c) => {
   console.error('Unhandled Application Error:', err);
