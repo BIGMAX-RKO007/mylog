@@ -60,11 +60,11 @@ export class SmartSearchUseCase {
 例如输入 sql，输出：数据库,db,database,sqlite`;
 
       console.log(`🤖 [Workers AI] 正在为用户搜索词 "${trimmedQuery}" 实时扩展同义词族...`);
-      const aiRes = await this.aiBinding.run('@cf/qwen/qwen1.5-7b-chat', {
+      const aiRes = await this.aiBinding.run('@cf/meta/llama-3.2-3b-instruct', {
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 50,
       }).catch(() => {
-        return this.aiBinding.run('@cf/meta/llama-3.1-8b-instruct', {
+        return this.aiBinding.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 50,
         });

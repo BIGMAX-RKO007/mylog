@@ -73,8 +73,8 @@ export class TagNormalizer {
     if (vectorizeBinding && aiBinding && typeof aiBinding.run === 'function') {
       try {
         console.log(`📐 [Vectorize] 正在为标签 "${cleaned}" 生成 768 维向量并检索云端向量库...`);
-        // 使用中文高质向量模型 bge-base-zh
-        const embedRes = await aiBinding.run('@cf/baai/bge-base-zh', {
+        // 使用 768 维高质向量模型 bge-base-en-v1.5
+        const embedRes = await aiBinding.run('@cf/baai/bge-base-en-v1.5', {
           text: [cleaned],
         });
         const vector = embedRes?.data?.[0];

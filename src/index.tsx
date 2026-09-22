@@ -107,12 +107,20 @@ app.get('/api/health-infra', async (c) => {
     report.workersAi = { status: 'missing_binding' };
   } else {
     try {
-      const embedTest = await c.env.AI.run('@cf/baai/bge-base-zh', { text: ['基础设施测试'] });
+      // 测试向量 Embedding 模型 (768 维)
+      const embedTest = await c.env.AI.run('@cf/baai/bge-base-en-v1.5', { text: ['基础设施测试'] });
+      // 测试文本生成模型
+      const textGenTest = await c.env.AI.run('@cf/meta/llama-3.2-3b-instruct', {
+        messages: [{ role: 'user', content: 'Ping' }],
+        max_tokens: 10,
+      });
+
       report.workersAi = {
         status: 'healthy',
-        model: '@cf/baai/bge-base-zh',
-        outputKeys: Object.keys(embedTest || {}),
+        embeddingModel: '@cf/baai/bge-base-en-v1.5',
         vectorDimensions: embedTest?.data?.[0]?.length || 0,
+        generationModel: '@cf/meta/llama-3.2-3b-instruct',
+        generationSample: textGenTest?.response || textGenTest,
       };
     } catch (err: any) {
       report.workersAi = { status: 'error', message: err.message || String(err) };

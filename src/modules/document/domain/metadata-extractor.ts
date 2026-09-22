@@ -139,12 +139,12 @@ export class MetadataExtractor {
 笔记内容：
 ${preview}`;
 
-        // 优先使用当前通用模型
-        const aiResponse = await aiBinding.run('@cf/qwen/qwen1.5-7b-chat', {
+        // 优先使用高响应速度的 Llama 3.2 3B，兜底使用 Llama 3.1 8B FP8
+        const aiResponse = await aiBinding.run('@cf/meta/llama-3.2-3b-instruct', {
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 150,
         }).catch(() => {
-          return aiBinding.run('@cf/meta/llama-3.1-8b-instruct', {
+          return aiBinding.run('@cf/meta/llama-3.1-8b-instruct-fp8', {
             messages: [{ role: 'user', content: prompt }],
             max_tokens: 150,
           });
