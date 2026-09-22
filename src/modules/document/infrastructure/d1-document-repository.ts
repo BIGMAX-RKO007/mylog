@@ -126,8 +126,17 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
   }
 
   async listPopularTags(limit: number = 20): Promise<{ name: string; count: number }[]> {
+    // 仅聚合当前真实被文档关联的有效标签 (杜绝孤儿标签残留)
     const { results } = await this.db
-      .prepare('SELECT name, usage_count as count FROM tags WHERE usage_count > 0 ORDER BY usage_count DESC, created_at DESC LIMIT ?')
+      .prepare(`
+        SELECT t.name, COUNT(ft.file_id) as count
+        FROM tags t
+        JOIN file_tags ft ON t.id = ft.tag_id
+        GROUP BY t.id, t.name
+        HAVING count > 0
+        ORDER BY count DESC, t.created_at DESC
+        LIMIT ?
+      `)
       .bind(limit)
       .all<{ name: string; count: number }>();
 
@@ -381,10 +390,20 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
   }
 
   async delete(id: string): Promise<void> {
-    // 外键级联删除 files, grants, file_tags
+    // 1. 删除可安全对象 (SQLite 外键自动级联删除 files, grants, file_tags)
     await this.db
       .prepare('DELETE FROM securable_objects WHERE id = ?')
       .bind(id)
+      .run();
+
+    // 2. 彻底清理孤儿标签：任何不再被任何文档关联的标签随之物理删除
+    await this.db
+      .prepare('DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM file_tags)')
+      .run();
+
+    // 3. 重新校准剩余存量标签的真实引用计数
+    await this.db
+      .prepare('UPDATE tags SET usage_count = (SELECT COUNT(*) FROM file_tags WHERE file_tags.tag_id = tags.id)')
       .run();
   }
 }

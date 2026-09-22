@@ -277,11 +277,19 @@ fileRoutes.delete('/files/:id', requireAuth, async (c) => {
     return c.text(deleteResult.error, 403);
   }
 
-  const [files, categories] = await Promise.all([
+  const [files, categories, popularTags] = await Promise.all([
     docRepo.listAccessible(session.userId),
     categoryRepo.getTree(),
+    docRepo.listPopularTags(20),
   ]);
 
   c.header('HX-Trigger', 'fileDeleted');
-  return c.html(<DriveView files={files} categories={categories} session={session} />);
+  return c.html(
+    <DriveView
+      files={files}
+      categories={categories}
+      popularTags={popularTags}
+      session={session}
+    />
+  );
 });

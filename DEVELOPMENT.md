@@ -275,13 +275,15 @@ graph TD
 
 1. 用户在卡片上点击右上角垃圾桶图标，或在阅读页点击删除按钮；
 2. 前端触发 HTMX 请求：`DELETE /files/:id`；
-3. `DeleteDocumentUseCase` 校验调用者是否具备该文档的 `DELETE` 或 `OWNERSHIP` 权限（注：`rol_admin` 拥有全局旁路放行）；
-4. 确认后执行删除事务：
+3. `DeleteDocumentUseCase` 校验调用者是否具备该文档的 `DELETE` 或 `OWNERSHIP` 权限（注：`rol_accountadmin` / `rol_admin` 拥有全局旁路放行）；
+4. 确认后执行级联删除事务：
    - 级联删除 `grants` 中关于该文档的对象授权；
    - 级联删除 `file_tags` 中该文档的标签绑定（底层触发 SQLite 外键级联）；
+   - 自动清理孤儿标签 (Orphaned Tags Cleanup)：物理清除所有在 `file_tags` 中不再被任何文档关联的标签记录；
+   - 自动重新校准存量标签的真实引用计数 (`usage_count`)；
    - 从 `file_contents` 物理删除正文数据；
-   - 从 `files` 表删除该条元数据记录；
-5. 返回状态码 `200`，HTMX 将前端对应的卡片 DOM 节点以淡出动效从当前 Bento 网格中彻底移除。
+   - 从 `securable_objects` 和 `files` 表删除该条文档记录；
+5. 返回状态码 `200`，HTMX 重新渲染更新后的 Bento 知识库主舞台与标签墙，若已无关联文档，相应标签即刻消失。
 
 ---
 
