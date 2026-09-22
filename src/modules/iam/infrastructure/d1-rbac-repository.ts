@@ -127,10 +127,10 @@ export class D1RbacRepository implements RbacRepositoryPort {
         FROM role_inheritance ri
         JOIN user_effective_roles uer ON ri.parent_role_id = uer.role_id
       )
-      -- 1. 管理员 (rol_admin) 拥有全局最高操作特权 (含 DELETE / OWNERSHIP)
+      -- 1. 系统超级管理员 (rol_accountadmin 或 rol_admin) 拥有全局最高操作特权 (含 DELETE / OWNERSHIP)
       SELECT 1 AS allowed
       FROM user_effective_roles
-      WHERE role_id = 'rol_admin'
+      WHERE role_id IN ('rol_accountadmin', 'rol_admin')
       UNION
       -- 2. 对象显式授权或拥有者特权
       SELECT 1 AS allowed
@@ -283,7 +283,8 @@ export class D1RbacRepository implements RbacRepositoryPort {
       .first<{ is_public: number }>();
 
     const isPublic = fileRow?.is_public === 1;
-    const isOwner = grantedPrivileges.includes('OWNERSHIP');
+    const isAdmin = effectiveRows.results.some(r => r.id === 'rol_accountadmin' || r.id === 'rol_admin');
+    const isOwner = grantedPrivileges.includes('OWNERSHIP') || isAdmin;
     const canRead = isOwner || grantedPrivileges.includes('READ') || isPublic;
     const canWrite = isOwner || grantedPrivileges.includes('WRITE');
     const canDelete = isOwner || grantedPrivileges.includes('DELETE');
