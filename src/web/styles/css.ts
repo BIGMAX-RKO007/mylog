@@ -1746,4 +1746,191 @@ body, .app-body {
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+
+/* ==========================================================================
+   AI 经验摘要、智能标签集与 Skill 复用样式
+   ========================================================================== */
+.card-ai-summary {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  margin-top: 0.45rem;
+  padding: 0.45rem 0.65rem;
+  background: rgba(14, 165, 233, 0.05);
+  border: 1px dashed rgba(14, 165, 233, 0.25);
+  border-radius: var(--radius-sm);
+  font-size: 0.76rem;
+  line-height: 1.45;
+  color: var(--text-body);
+}
+
+.ai-spark-icon {
+  font-size: 0.82rem;
+  flex-shrink: 0;
+}
+
+.card-tags-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.5rem;
+}
+
+.card-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  background: var(--bg-stage);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--primary-blue);
+  text-decoration: none;
+  transition: all 0.18s ease;
+}
+
+.card-tag-pill:hover {
+  background: var(--primary-blue-light);
+  border-color: var(--primary-blue);
+}
+
+.tags-ribbon-container {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.65rem;
+  padding: 0.5rem 0.8rem;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-md);
+}
+
+.tags-ribbon-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-right: 0.3rem;
+}
+
+.tag-pill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.22rem 0.65rem;
+  background: var(--bg-stage);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-pill);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--text-body);
+  text-decoration: none;
+  transition: all 0.18s ease;
+}
+
+.tag-pill-chip:hover {
+  border-color: var(--primary-blue);
+  color: var(--primary-blue);
+  background: var(--primary-blue-light);
+}
+
+.tag-pill-chip.active-tag-pill {
+  background: var(--primary-blue);
+  color: #ffffff;
+  border-color: var(--primary-blue);
+  font-weight: 600;
+}
+
+.tag-count {
+  font-size: 0.68rem;
+  opacity: 0.75;
+}
+
+.tag-close-x {
+  font-size: 0.7rem;
+  margin-left: 0.2rem;
+}
+
+.ai-expansion-banner {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.55rem 0.85rem;
+  margin-bottom: 0.75rem;
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.08), rgba(14, 165, 233, 0.08));
+  border: 1px solid rgba(14, 165, 233, 0.2);
+  border-radius: var(--radius-md);
+  font-size: 0.8rem;
+}
+
+.banner-sparkle {
+  font-size: 0.95rem;
+}
+
+.banner-title {
+  font-weight: 600;
+  color: var(--text-title);
+}
+
+.banner-keyword-pills {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.expanded-kw-pill {
+  padding: 0.15rem 0.45rem;
+  background: var(--card-bg);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  color: var(--primary-blue);
+  font-weight: 500;
+}
+
+.viewer-ai-summary-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin-top: 0.85rem;
+  padding: 0.75rem 1rem;
+  background: rgba(14, 165, 233, 0.05);
+  border-left: 3px solid var(--primary-blue);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  color: var(--text-title);
+}
+
+.viewer-tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+}
+
+.btn-copy-skill {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: #ffffff !important;
+  font-weight: 600;
+  border: none;
+  box-shadow: 0 2px 10px rgba(14, 165, 233, 0.35);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-copy-skill:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.45);
+}
+
+.btn-copy-skill.btn-copied {
+  background: #10b981 !important;
+  box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35);
+}
 `;
+

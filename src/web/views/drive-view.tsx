@@ -12,6 +12,9 @@ interface DrivePageProps {
   selectedCategoryId?: string;
   selectedSort?: 'latest' | 'views';
   searchQuery?: string;
+  popularTags?: { name: string; count: number }[];
+  selectedTag?: string;
+  expandedKeywords?: string[];
   selectedFile?: {
     metadata: DocumentMetadata;
     parsed: ParsedDocument;
@@ -26,9 +29,13 @@ export const DriveView: FC<DrivePageProps> = ({
   selectedCategoryId = '',
   selectedSort = 'latest',
   searchQuery = '',
+  popularTags = [],
+  selectedTag = '',
+  expandedKeywords = [],
   selectedFile,
   session,
 }) => {
+
   // 1. 单篇文档深度沉浸式阅读模式 (Reader Mode)
   if (selectedFile) {
     return (
@@ -164,9 +171,10 @@ export const DriveView: FC<DrivePageProps> = ({
                 hx-get="/files"
                 hx-trigger="keyup changed delay:250ms, search"
                 hx-target="#file-grid-container"
-                hx-include="#current-category-id, #current-sort-id"
+                hx-include="#current-category-id, #current-sort-id, #current-tag-id"
                 hx-swap="innerHTML"
               />
+
               <span class="search-kbd-pill">⌘K</span>
             </div>
           </div>
@@ -223,17 +231,33 @@ export const DriveView: FC<DrivePageProps> = ({
       {/* 隐藏状态字段供检索与排序联动 */}
       <input type="hidden" id="current-category-id" name="categoryId" value={selectedCategoryId} />
       <input type="hidden" id="current-sort-id" name="sort" value={selectedSort} />
+      <input type="hidden" id="current-tag-id" name="tag" value={selectedTag} />
 
       {/* 2. 主体舞台 (Main Bento Stage) */}
       <main class="bento-main-stage">
         {/* 分类筛选与排序控制中枢 */}
         <section class="bento-control-hub">
+          {/* AI 意图理解联想词浮现提示条 */}
+          {expandedKeywords && expandedKeywords.length > 0 && (
+            <div class="ai-expansion-banner">
+              <span class="banner-sparkle">💡</span>
+              <span class="banner-title">智能管理员联想关联领域：</span>
+              <div class="banner-keyword-pills">
+                {expandedKeywords.map((kw) => (
+                  <span key={kw} class="expanded-kw-pill">
+                    {kw}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 一级分类横向滚动胶囊条 (Mobile-friendly horizontal ribbon) */}
           <div class="category-scroll-ribbon">
             <a
-              href={`/?sort=${selectedSort}`}
+              href={`/?sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
               class={`category-ribbon-pill ${!selectedCategoryId ? 'active' : ''}`}
-              hx-get={`/?sort=${selectedSort}`}
+              hx-get={`/?sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
               hx-target="#drive-main-container"
               hx-swap="outerHTML"
               hx-push-url="true"
@@ -247,9 +271,9 @@ export const DriveView: FC<DrivePageProps> = ({
               return (
                 <a
                   key={cat.id}
-                  href={`/?categoryId=${cat.id}&sort=${selectedSort}`}
+                  href={`/?categoryId=${cat.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
                   class={`category-ribbon-pill ${isSelected ? 'active' : ''}`}
-                  hx-get={`/?categoryId=${cat.id}&sort=${selectedSort}`}
+                  hx-get={`/?categoryId=${cat.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
                   hx-target="#drive-main-container"
                   hx-swap="outerHTML"
                   hx-push-url="true"
@@ -278,9 +302,9 @@ export const DriveView: FC<DrivePageProps> = ({
             <div class="sub-ribbon-container">
               <span class="sub-ribbon-hint">{activeL1.name} 子分类：</span>
               <a
-                href={`/?categoryId=${activeL1.id}&sort=${selectedSort}`}
+                href={`/?categoryId=${activeL1.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
                 class={`sub-chip ${selectedCategoryId === activeL1.id ? 'active' : ''}`}
-                hx-get={`/?categoryId=${activeL1.id}&sort=${selectedSort}`}
+                hx-get={`/?categoryId=${activeL1.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
                 hx-target="#drive-main-container"
                 hx-swap="outerHTML"
                 hx-push-url="true"
@@ -290,9 +314,9 @@ export const DriveView: FC<DrivePageProps> = ({
               {activeL1.children.map((sub) => (
                 <a
                   key={sub.id}
-                  href={`/?categoryId=${sub.id}&sort=${selectedSort}`}
+                  href={`/?categoryId=${sub.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
                   class={`sub-chip ${selectedCategoryId === sub.id ? 'active' : ''}`}
-                  hx-get={`/?categoryId=${sub.id}&sort=${selectedSort}`}
+                  hx-get={`/?categoryId=${sub.id}&sort=${selectedSort}${selectedTag ? `&tag=${encodeURIComponent(selectedTag)}` : ''}`}
                   hx-target="#drive-main-container"
                   hx-swap="outerHTML"
                   hx-push-url="true"
@@ -302,6 +326,53 @@ export const DriveView: FC<DrivePageProps> = ({
               ))}
             </div>
           )}
+
+          {/* 热门智能标签横向胶囊墙 */}
+          {popularTags && popularTags.length > 0 && (
+            <div class="tags-ribbon-container">
+              <span class="tags-ribbon-hint">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                  <line x1="7" y1="7" x2="7.01" y2="7" />
+                </svg>
+                <span>标签集：</span>
+              </span>
+
+              {selectedTag && (
+                <a
+                  href={`/?categoryId=${selectedCategoryId}&sort=${selectedSort}`}
+                  class="tag-pill-chip active-tag-pill"
+                  title="点击取消此标签筛选"
+                  hx-get={`/?categoryId=${selectedCategoryId}&sort=${selectedSort}`}
+                  hx-target="#drive-main-container"
+                  hx-swap="outerHTML"
+                  hx-push-url="true"
+                >
+                  <span>#{selectedTag}</span>
+                  <span class="tag-close-x">✕</span>
+                </a>
+              )}
+
+              {popularTags
+                .filter((pt) => pt.name !== selectedTag)
+                .slice(0, 12)
+                .map((pt) => (
+                  <a
+                    key={pt.name}
+                    href={`/?tag=${encodeURIComponent(pt.name)}&categoryId=${selectedCategoryId}&sort=${selectedSort}`}
+                    class="tag-pill-chip"
+                    hx-get={`/?tag=${encodeURIComponent(pt.name)}&categoryId=${selectedCategoryId}&sort=${selectedSort}`}
+                    hx-target="#drive-main-container"
+                    hx-swap="outerHTML"
+                    hx-push-url="true"
+                  >
+                    <span>#{pt.name}</span>
+                    <span class="tag-count">{pt.count}</span>
+                  </a>
+                ))}
+            </div>
+          )}
+
 
           {/* 状态统计与排序控制器 */}
           <div class="bento-filter-row">

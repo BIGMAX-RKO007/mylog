@@ -12,17 +12,19 @@ export const fileRoutes = new Hono<AppContext>();
 // 1. 网盘首页 (未登录直接浏览公开知识库，登录后展示全部管理资源)
 fileRoutes.get('/', async (c) => {
   const session = c.get('session');
-  const { docRepo, categoryRepo } = c.get('services');
+  const { docRepo, categoryRepo, smartSearchUseCase } = c.get('services');
   const categoryId = c.req.query('categoryId');
   const sort = (c.req.query('sort') as 'latest' | 'views') || 'latest';
   const q = c.req.query('q');
+  const tag = c.req.query('tag');
 
-  const [files, categories] = await Promise.all([
-    session
-      ? docRepo.listAccessible(session.userId, q, categoryId, sort)
-      : docRepo.listPublic(q, categoryId, sort),
+  const [searchResult, categories, popularTags] = await Promise.all([
+    smartSearchUseCase.search(q, session?.userId, categoryId, tag, sort),
     categoryRepo.getTree(),
+    docRepo.listPopularTags(20),
   ]);
+
+  const files = searchResult.files;
 
   if (c.req.header('HX-Request') && c.req.header('HX-Target') === 'drive-main-container') {
     return c.html(
@@ -32,6 +34,9 @@ fileRoutes.get('/', async (c) => {
         selectedCategoryId={categoryId}
         selectedSort={sort}
         searchQuery={q}
+        popularTags={popularTags}
+        selectedTag={tag}
+        expandedKeywords={searchResult.expandedKeywords}
         session={session}
       />
     );
@@ -44,25 +49,28 @@ fileRoutes.get('/', async (c) => {
       selectedCategoryId={categoryId}
       selectedSort={sort}
       searchQuery={q}
+      popularTags={popularTags}
+      selectedTag={tag}
+      expandedKeywords={searchResult.expandedKeywords}
       session={session}
     />
   );
 });
 
-// 2. 搜索或按分类、排序刷新文件网格 (HTMX 局部刷新)
+// 2. 搜索或按分类、标签、排序刷新文件网格 (HTMX 局部刷新)
 fileRoutes.get('/files', async (c) => {
   const session = c.get('session');
-  const { docRepo } = c.get('services');
+  const { smartSearchUseCase } = c.get('services');
   const q = c.req.query('q');
   const categoryId = c.req.query('categoryId');
+  const tag = c.req.query('tag');
   const sort = (c.req.query('sort') as 'latest' | 'views') || 'latest';
 
-  const files = session
-    ? await docRepo.listAccessible(session.userId, q, categoryId, sort)
-    : await docRepo.listPublic(q, categoryId, sort);
+  const searchResult = await smartSearchUseCase.search(q, session?.userId, categoryId, tag, sort);
 
-  return c.html(<FileGrid files={files} />);
+  return c.html(<FileGrid files={searchResult.files} />);
 });
+
 
 // 3. 打开上传模态框 (HTMX 弹出，支持游客与登录管理员)
 fileRoutes.get('/files/upload-modal', (c) => {

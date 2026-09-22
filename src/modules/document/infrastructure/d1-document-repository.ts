@@ -14,8 +14,8 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
         .prepare('INSERT INTO securable_objects (id, object_type, owner_role_id, created_at) VALUES (?, ?, ?, ?)')
         .bind(doc.id, 'FILE', ownerRoleId, doc.createdAt),
       this.db
-        .prepare('INSERT INTO files (id, name, title, size, r2_key, sha256, is_public, category_id, views, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-        .bind(doc.id, doc.name, doc.title, doc.size, doc.r2Key, doc.sha256, doc.isPublic ? 1 : 0, categoryId, doc.views || 0, doc.createdAt, doc.updatedAt),
+        .prepare('INSERT INTO files (id, name, title, size, r2_key, sha256, is_public, category_id, views, ai_summary, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(doc.id, doc.name, doc.title, doc.size, doc.r2Key, doc.sha256, doc.isPublic ? 1 : 0, categoryId, doc.views || 0, doc.aiSummary || null, doc.createdAt, doc.updatedAt),
       this.db
         .prepare('INSERT INTO grants (id, role_id, object_id, privilege, granted_by, granted_at) VALUES (?, ?, ?, ?, ?, ?)')
         .bind(grantId, ownerRoleId, doc.id, 'OWNERSHIP', creatorUserId, doc.createdAt),
@@ -27,7 +27,8 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
       .prepare(`
         SELECT f.id, f.name, f.title, f.size, f.r2_key, f.sha256, f.is_public, 
                f.category_id, c.name as category_name, pc.name as parent_category_name,
-               f.views, so.owner_role_id, f.created_at, f.updated_at
+               f.views, f.ai_summary, so.owner_role_id, f.created_at, f.updated_at,
+               (SELECT GROUP_CONCAT(t.name) FROM file_tags ft JOIN tags t ON ft.tag_id = t.id WHERE ft.file_id = f.id) as tag_names
         FROM files f
         JOIN securable_objects so ON f.id = so.id
         LEFT JOIN categories c ON f.category_id = c.id
@@ -47,7 +48,9 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
         category_name: string | null;
         parent_category_name: string | null;
         views: number;
+        ai_summary: string | null;
         owner_role_id: string;
+        tag_names: string | null;
         created_at: number;
         updated_at: number;
       }>();
@@ -66,6 +69,8 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
       categoryName: row.category_name || '未分类',
       parentCategoryName: row.parent_category_name || undefined,
       views: row.views || 0,
+      aiSummary: row.ai_summary || undefined,
+      tags: row.tag_names ? row.tag_names.split(',').filter(Boolean) : [],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
@@ -78,7 +83,64 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
       .run();
   }
 
-  async listAccessible(userId: string, search?: string, categoryId?: string, sort?: 'latest' | 'views'): Promise<DocumentMetadata[]> {
+  async updateAiSummary(id: string, summary: string): Promise<void> {
+    await this.db
+      .prepare('UPDATE files SET ai_summary = ?, updated_at = ? WHERE id = ?')
+      .bind(summary, Date.now(), id)
+      .run();
+  }
+
+  async attachTags(fileId: string, tagNames: string[]): Promise<void> {
+    if (!tagNames || tagNames.length === 0) return;
+
+    const now = Date.now();
+    for (const rawName of tagNames) {
+      const name = rawName.trim();
+      if (!name) continue;
+
+      let tag = await this.db
+        .prepare('SELECT id FROM tags WHERE name = ?')
+        .bind(name)
+        .first<{ id: string }>();
+
+      let tagId: string;
+      if (!tag) {
+        tagId = `tag_${crypto.randomUUID().replace(/-/g, '').slice(0, 12)}`;
+        await this.db
+          .prepare('INSERT INTO tags (id, name, usage_count, created_at) VALUES (?, ?, 1, ?)')
+          .bind(tagId, name, now)
+          .run();
+      } else {
+        tagId = tag.id;
+        await this.db
+          .prepare('UPDATE tags SET usage_count = usage_count + 1 WHERE id = ?')
+          .bind(tagId)
+          .run();
+      }
+
+      await this.db
+        .prepare('INSERT OR IGNORE INTO file_tags (file_id, tag_id, created_at) VALUES (?, ?, ?)')
+        .bind(fileId, tagId, now)
+        .run();
+    }
+  }
+
+  async listPopularTags(limit: number = 20): Promise<{ name: string; count: number }[]> {
+    const { results } = await this.db
+      .prepare('SELECT name, usage_count as count FROM tags WHERE usage_count > 0 ORDER BY usage_count DESC, created_at DESC LIMIT ?')
+      .bind(limit)
+      .all<{ name: string; count: number }>();
+
+    return results || [];
+  }
+
+  async listAccessible(
+    userId: string,
+    search?: string,
+    categoryId?: string,
+    sort?: 'latest' | 'views',
+    tag?: string
+  ): Promise<DocumentMetadata[]> {
     let query = `
       WITH RECURSIVE user_effective_roles AS (
         SELECT role_id FROM user_roles WHERE user_id = ?
@@ -89,7 +151,8 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
       )
       SELECT DISTINCT f.id, f.name, f.title, f.size, f.r2_key, f.sha256, f.is_public,
              f.category_id, c.name as category_name, pc.name as parent_category_name,
-             f.views, so.owner_role_id, f.created_at, f.updated_at
+             f.views, f.ai_summary, so.owner_role_id, f.created_at, f.updated_at,
+             (SELECT GROUP_CONCAT(t.name) FROM file_tags ft JOIN tags t ON ft.tag_id = t.id WHERE ft.file_id = f.id) as tag_names
       FROM files f
       JOIN securable_objects so ON f.id = so.id
       LEFT JOIN categories c ON f.category_id = c.id
@@ -104,9 +167,14 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
     const params: unknown[] = [userId];
 
     if (search && search.trim()) {
-      query += ` AND (f.title LIKE ? OR f.name LIKE ?)`;
+      query += ` AND (f.title LIKE ? OR f.name LIKE ? OR f.ai_summary LIKE ?)`;
       const searchPattern = `%${search.trim()}%`;
-      params.push(searchPattern, searchPattern);
+      params.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    if (tag && tag.trim()) {
+      query += ` AND f.id IN (SELECT ft.file_id FROM file_tags ft JOIN tags t ON ft.tag_id = t.id WHERE t.name = ?)`;
+      params.push(tag.trim());
     }
 
     if (categoryId && categoryId.trim()) {
@@ -129,12 +197,14 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
       category_name: string | null;
       parent_category_name: string | null;
       views: number;
+      ai_summary: string | null;
       owner_role_id: string;
+      tag_names: string | null;
       created_at: number;
       updated_at: number;
     }>();
 
-    return results.map(row => ({
+    return results.map((row) => ({
       id: row.id,
       name: row.name,
       title: row.title,
@@ -147,16 +217,24 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
       categoryName: row.category_name || '未分类',
       parentCategoryName: row.parent_category_name || undefined,
       views: row.views || 0,
+      aiSummary: row.ai_summary || undefined,
+      tags: row.tag_names ? row.tag_names.split(',').filter(Boolean) : [],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
   }
 
-  async listPublic(search?: string, categoryId?: string, sort?: 'latest' | 'views'): Promise<DocumentMetadata[]> {
+  async listPublic(
+    search?: string,
+    categoryId?: string,
+    sort?: 'latest' | 'views',
+    tag?: string
+  ): Promise<DocumentMetadata[]> {
     let query = `
       SELECT f.id, f.name, f.title, f.size, f.r2_key, f.sha256, f.is_public,
              f.category_id, c.name as category_name, pc.name as parent_category_name,
-             f.views, so.owner_role_id, f.created_at, f.updated_at
+             f.views, f.ai_summary, so.owner_role_id, f.created_at, f.updated_at,
+             (SELECT GROUP_CONCAT(t.name) FROM file_tags ft JOIN tags t ON ft.tag_id = t.id WHERE ft.file_id = f.id) as tag_names
       FROM files f
       JOIN securable_objects so ON f.id = so.id
       LEFT JOIN categories c ON f.category_id = c.id
@@ -167,9 +245,14 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
     const params: unknown[] = [];
 
     if (search && search.trim()) {
-      query += ` AND (f.title LIKE ? OR f.name LIKE ?)`;
+      query += ` AND (f.title LIKE ? OR f.name LIKE ? OR f.ai_summary LIKE ?)`;
       const searchPattern = `%${search.trim()}%`;
-      params.push(searchPattern, searchPattern);
+      params.push(searchPattern, searchPattern, searchPattern);
+    }
+
+    if (tag && tag.trim()) {
+      query += ` AND f.id IN (SELECT ft.file_id FROM file_tags ft JOIN tags t ON ft.tag_id = t.id WHERE t.name = ?)`;
+      params.push(tag.trim());
     }
 
     if (categoryId && categoryId.trim()) {
@@ -192,12 +275,14 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
       category_name: string | null;
       parent_category_name: string | null;
       views: number;
+      ai_summary: string | null;
       owner_role_id: string;
+      tag_names: string | null;
       created_at: number;
       updated_at: number;
     }>();
 
-    return results.map(row => ({
+    return results.map((row) => ({
       id: row.id,
       name: row.name,
       title: row.title,
@@ -210,16 +295,23 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
       categoryName: row.category_name || '未分类',
       parentCategoryName: row.parent_category_name || undefined,
       views: row.views || 0,
+      aiSummary: row.ai_summary || undefined,
+      tags: row.tag_names ? row.tag_names.split(',').filter(Boolean) : [],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
   }
 
-  async listAll(categoryId?: string, sort?: 'latest' | 'views'): Promise<DocumentMetadata[]> {
+  async listAll(
+    categoryId?: string,
+    sort?: 'latest' | 'views',
+    tag?: string
+  ): Promise<DocumentMetadata[]> {
     let query = `
       SELECT f.id, f.name, f.title, f.size, f.r2_key, f.sha256, f.is_public,
              f.category_id, c.name as category_name, pc.name as parent_category_name,
-             f.views, so.owner_role_id, f.created_at, f.updated_at
+             f.views, f.ai_summary, so.owner_role_id, f.created_at, f.updated_at,
+             (SELECT GROUP_CONCAT(t.name) FROM file_tags ft JOIN tags t ON ft.tag_id = t.id WHERE ft.file_id = f.id) as tag_names
       FROM files f
       JOIN securable_objects so ON f.id = so.id
       LEFT JOIN categories c ON f.category_id = c.id
@@ -228,8 +320,14 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
 
     const params: unknown[] = [];
 
+    if (tag && tag.trim()) {
+      query += ` WHERE f.id IN (SELECT ft.file_id FROM file_tags ft JOIN tags t ON ft.tag_id = t.id WHERE t.name = ?)`;
+      params.push(tag.trim());
+    }
+
     if (categoryId && categoryId.trim()) {
-      query += ` WHERE (f.category_id = ? OR f.category_id IN (SELECT id FROM categories WHERE parent_id = ?))`;
+      query += tag && tag.trim() ? ` AND ` : ` WHERE `;
+      query += `(f.category_id = ? OR f.category_id IN (SELECT id FROM categories WHERE parent_id = ?))`;
       params.push(categoryId.trim(), categoryId.trim());
     }
 
@@ -248,12 +346,14 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
       category_name: string | null;
       parent_category_name: string | null;
       views: number;
+      ai_summary: string | null;
       owner_role_id: string;
+      tag_names: string | null;
       created_at: number;
       updated_at: number;
     }>();
 
-    return results.map(row => ({
+    return results.map((row) => ({
       id: row.id,
       name: row.name,
       title: row.title,
@@ -266,6 +366,8 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
       categoryName: row.category_name || '未分类',
       parentCategoryName: row.parent_category_name || undefined,
       views: row.views || 0,
+      aiSummary: row.ai_summary || undefined,
+      tags: row.tag_names ? row.tag_names.split(',').filter(Boolean) : [],
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -279,7 +381,7 @@ export class D1DocumentRepository implements DocumentRepositoryPort {
   }
 
   async delete(id: string): Promise<void> {
-    // 外键级联删除 files, grants
+    // 外键级联删除 files, grants, file_tags
     await this.db
       .prepare('DELETE FROM securable_objects WHERE id = ?')
       .bind(id)

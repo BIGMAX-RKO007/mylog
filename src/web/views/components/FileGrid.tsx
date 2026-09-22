@@ -90,17 +90,33 @@ export const FileGrid: FC<FileGridProps> = ({ files }) => {
               </div>
             </div>
 
-            {/* 卡片主体：加粗现代标题 */}
+            {/* 卡片主体：加粗现代标题与标签、AI 摘要 */}
             <div class="card-body-content">
               <h3 class="card-title" title={file.title || file.name}>
                 {file.title || file.name}
               </h3>
-              {bentoVariant === 'bento-hero' && (
+              {file.aiSummary ? (
+                <div class="card-ai-summary" title={file.aiSummary}>
+                  <span class="ai-spark-icon">✨</span>
+                  <span class="summary-text">{file.aiSummary}</span>
+                </div>
+              ) : bentoVariant === 'bento-hero' ? (
                 <p class="bento-hero-sub">
                   点击立即开启沉浸式 Markdown 阅读体验 · 支持数学公式与代码高亮
                 </p>
+              ) : null}
+
+              {file.tags && file.tags.length > 0 && (
+                <div class="card-tags-list">
+                  {file.tags.map((t) => (
+                    <span key={t} class="card-tag-pill">
+                      #{t}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
+
 
             {/* 卡片底栏：四角平滑内嵌元数据 */}
             <div class="card-footer-row">

@@ -9,3 +9,13 @@ binding = "DB"
 database_name = "mylog-db"
 database_id = "6f65ca18-88ba-4b4c-88c9-a2c27628456a"
 migrations_dir = "migrations"
+
+# Workers AI 绑定 (提供 Llama 3.1 与 BGE 中文嵌入向量)
+[ai]
+binding = "AI"
+
+# 轻量向量数据库绑定 (用于标签语义聚类与防膨胀)
+[[vectorize]]
+binding = "TAG_VECTORS"
+index_name = "mylog-tag-vectors"
+

@@ -59,9 +59,59 @@ export const FileViewer: FC<FileViewerProps> = ({ metadata, parsed, isOwner }) =
               <span class="badge badge-private">私有</span>
             )}
           </div>
+
+          {/* AI 核心经验摘要与标签栏 */}
+          {metadata.aiSummary && (
+            <div class="viewer-ai-summary-box">
+              <span class="ai-spark-icon">✨</span>
+              <div class="summary-text">
+                <strong>经验概括：</strong>{metadata.aiSummary}
+              </div>
+            </div>
+          )}
+
+          {metadata.tags && metadata.tags.length > 0 && (
+            <div class="viewer-tags-row">
+              {metadata.tags.map((t) => (
+                <a key={t} href={`/?tag=${encodeURIComponent(t)}`} class="card-tag-pill">
+                  #{t}
+                </a>
+              ))}
+            </div>
+          )}
         </div>
 
         <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          {/* 一键复制为 AI Skill / Prompt 规范 (拿来即用) */}
+          <button
+            type="button"
+            id="copy-skill-btn"
+            class="btn btn-sm btn-copy-skill"
+            title="一键复制为标准 AI 提示词规范，直接喂给下一个 AI 任务"
+            onclick={`
+              const skillText = \`---
+title: ${metadata.title.replace(/[`"'\\]/g, '')}
+tags: [${(metadata.tags || []).join(', ')}]
+summary: ${(metadata.aiSummary || '').replace(/[`"'\\]/g, '')}
+verified: true
+---
+
+\${document.getElementById('raw-markdown-cache').textContent}\`;
+              navigator.clipboard.writeText(skillText).then(() => {
+                const btn = document.getElementById('copy-skill-btn');
+                const oldHtml = btn.innerHTML;
+                btn.innerHTML = '✓ 已复制为 Skill 规范';
+                btn.classList.add('btn-copied');
+                setTimeout(() => {
+                  btn.innerHTML = oldHtml;
+                  btn.classList.remove('btn-copied');
+                }, 2000);
+              });
+            `}
+          >
+            <span>✨ 复制为 AI Skill</span>
+          </button>
+
           {/* 下载原始 MD */}
           <a href={`/files/${metadata.id}/raw`} target="_blank" class="btn btn-sm">
             💾 原始文件
@@ -84,7 +134,7 @@ export const FileViewer: FC<FileViewerProps> = ({ metadata, parsed, isOwner }) =
               <button
                 class="btn btn-sm btn-danger"
                 hx-delete={`/files/${metadata.id}`}
-                hx-confirm="确定要彻底从 R2 存储桶与数据库中删除此文档吗？"
+                hx-confirm="确定要彻底从存储桶与数据库中删除此文档吗？"
                 hx-target="#drive-main-container"
                 hx-swap="innerHTML"
               >
@@ -94,6 +144,12 @@ export const FileViewer: FC<FileViewerProps> = ({ metadata, parsed, isOwner }) =
           )}
         </div>
       </div>
+
+      {/* 隐藏的 Raw Markdown 缓存供一键复制为 Skill */}
+      <script type="text/plain" id="raw-markdown-cache">
+        {parsed.rawMarkdown}
+      </script>
+
 
       {/* 渲染后的高质感 Markdown HTML 正文 */}
       <div class="markdown-body" dangerouslySetInnerHTML={{ __html: parsed.renderedHtml }}></div>

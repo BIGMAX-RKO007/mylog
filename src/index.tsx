@@ -11,7 +11,9 @@ import { D1DocumentRepository } from './modules/document/infrastructure/d1-docum
 import { CommitDocumentUseCase } from './modules/document/application/commit-document';
 import { GetDocumentUseCase } from './modules/document/application/get-document';
 import { DeleteDocumentUseCase } from './modules/document/application/delete-document';
+import { SmartSearchUseCase } from './modules/document/application/smart-search';
 import { D1CategoryRepository } from './modules/document/infrastructure/d1-category-repository';
+
 import { authRoutes } from './web/routes/auth-routes';
 import { fileRoutes } from './web/routes/file-routes';
 import { adminRbacRoutes } from './web/routes/admin-rbac-routes';
@@ -40,9 +42,16 @@ app.use('*', async (c, next) => {
 
   const authUseCase = new AuthenticateUserUseCase(d1UserRepo, d1RbacRepo);
   const checkPermissionUseCase = new CheckPermissionUseCase(d1RbacRepo);
-  const commitDocUseCase = new CommitDocumentUseCase(d1Storage, d1DocRepo, globalEventBus);
+  const commitDocUseCase = new CommitDocumentUseCase(
+    d1Storage,
+    d1DocRepo,
+    globalEventBus,
+    c.env.AI,
+    c.env.TAG_VECTORS
+  );
   const getDocUseCase = new GetDocumentUseCase(d1Storage, d1DocRepo, checkPermissionUseCase);
   const deleteDocUseCase = new DeleteDocumentUseCase(d1Storage, d1DocRepo, checkPermissionUseCase);
+  const smartSearchUseCase = new SmartSearchUseCase(d1DocRepo, c.env.AI);
 
   c.set('services', {
     d1UserRepo,
@@ -55,7 +64,9 @@ app.use('*', async (c, next) => {
     commitDocUseCase,
     getDocUseCase,
     deleteDocUseCase,
+    smartSearchUseCase,
   });
+
 
   const sessionToken = getCookie(c, 'mylog_session');
   if (sessionToken) {

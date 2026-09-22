@@ -11,8 +11,18 @@ export interface DocumentMetadata {
   categoryName?: string;
   parentCategoryName?: string;
   views: number;
+  aiSummary?: string;
+  tags?: string[];
   createdAt: number;
   updatedAt: number;
+}
+
+export interface Tag {
+  id: string;
+  name: string;
+  canonicalId?: string;
+  usageCount: number;
+  createdAt: number;
 }
 
 export interface ParsedDocument {
@@ -21,4 +31,7 @@ export interface ParsedDocument {
   rawMarkdown: string;
   wordCount: number;
   size: number;
+  aiSummary?: string;
+  tags?: string[];
 }
+

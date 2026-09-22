@@ -2,7 +2,10 @@ export interface Bindings {
   DB: D1Database;
   STORAGE: R2Bucket;
   AUTH_SECRET?: string;
+  AI?: any;
+  TAG_VECTORS?: any;
 }
+
 
 export interface UserSession {
   userId: string;
@@ -22,7 +25,9 @@ export interface AppServices {
   getDocUseCase: any;
   deleteDocUseCase: any;
   categoryRepo: any;
+  smartSearchUseCase: any;
 }
+
 
 export interface AppVariables {
   session?: UserSession;
