@@ -3,7 +3,6 @@ import { UserSession } from '../core/types';
 export interface UserRecord {
   id: string;
   username: string;
-  passwordHash: string;
   isActive: boolean;
   createdAt: number;
 }
@@ -16,185 +15,91 @@ export interface UserSummary {
 }
 
 export class AuthService {
-  private static ITERATIONS = 100000;
-  private static KEY_LEN = 32; // 256 bits
-
   constructor(private db: D1Database) {}
 
   // -------------------------------------------------------------
-  // 密码哈希与验证 (基于标准 Web Crypto API)
+  // SSO 用户与角色映射同步 (核心)
   // -------------------------------------------------------------
 
-  static async hashPassword(password: string): Promise<string> {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const enc = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      enc.encode(password),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveBits']
-    );
-
-    const hashBuffer = await crypto.subtle.deriveBits(
-      {
-        name: 'PBKDF2',
-        salt,
-        iterations: this.ITERATIONS,
-        hash: 'SHA-256',
-      },
-      keyMaterial,
-      this.KEY_LEN * 8
-    );
-
-    const saltHex = Array.from(salt).map((b) => b.toString(16).padStart(2, '0')).join('');
-    const hashHex = Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
-    return `${saltHex}:${hashHex}`;
-  }
-
-  static async verifyPassword(password: string, storedHash: string): Promise<boolean> {
-    const [saltHex, expectedHashHex] = storedHash.split(':');
-    if (!saltHex || !expectedHashHex) return false;
-
-    const salt = new Uint8Array(saltHex.match(/.{1,2}/g)!.map((byte) => parseInt(byte, 16)));
-    const enc = new TextEncoder();
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      enc.encode(password),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveBits']
-    );
-
-    const hashBuffer = await crypto.subtle.deriveBits(
-      {
-        name: 'PBKDF2',
-        salt,
-        iterations: this.ITERATIONS,
-        hash: 'SHA-256',
-      },
-      keyMaterial,
-      this.KEY_LEN * 8
-    );
-
-    const actualHashHex = Array.from(new Uint8Array(hashBuffer)).map((b) => b.toString(16).padStart(2, '0')).join('');
-    return actualHashHex === expectedHashHex;
-  }
-
-  // -------------------------------------------------------------
-  // 用户注册与登录
-  // -------------------------------------------------------------
-
-  async register(username: string, password: string): Promise<{ sessionToken: string; session: UserSession }> {
-    const trimmed = username.trim().toLowerCase();
-    if (!trimmed || trimmed.length < 3) {
-      throw new Error('用户名至少需要 3 个字符');
-    }
-    if (!password || password.length < 6) {
-      throw new Error('密码至少需要 6 个字符');
-    }
-
-    const existing = await this.db
-      .prepare('SELECT id FROM users WHERE username = ?')
-      .bind(trimmed)
-      .first<{ id: string }>();
-
-    if (existing) {
-      throw new Error('该用户名已被占用');
-    }
-
-    const userId = `usr_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
-    const passwordHash = await AuthService.hashPassword(password);
+  async syncSsoUser(ssoUser: { id: string; username: string; roles: string[] }): Promise<{ sessionToken: string; session: UserSession }> {
+    const userId = ssoUser.id;
+    const username = ssoUser.username.trim().toLowerCase();
     const now = Date.now();
 
-    // 1. 创建用户
-    await this.db
-      .prepare('INSERT INTO users (id, username, password_hash, is_active, created_at) VALUES (?, ?, ?, 1, ?)')
-      .bind(userId, trimmed, passwordHash, now)
-      .run();
+    // 1. 确保用户在本地 D1 users 表中存在
+    const existingUser = await this.db
+      .prepare('SELECT id, is_active FROM users WHERE id = ?')
+      .bind(userId)
+      .first<{ id: string; is_active: number }>();
 
-    // 2. 为新用户创建专有的私有所有权角色 (Snowflake 模式)
+    if (!existingUser) {
+      await this.db
+        .prepare('INSERT INTO users (id, username, password_hash, is_active, created_at) VALUES (?, ?, ?, 1, ?)')
+        .bind(userId, username, 'SSO_MANAGED_IDENTITY', now)
+        .run();
+    }
+
+    // 2. 确保私有角色和角色映射存在 (Snowflake 模式)
     const privateRoleId = `rol_user_${userId.slice(4)}`;
     await this.db
-      .prepare('INSERT INTO roles (id, name, description, is_system, created_at) VALUES (?, ?, ?, 0, ?)')
-      .bind(privateRoleId, `ROLE_${trimmed.toUpperCase()}`, `User ${trimmed}'s private ownership role`, now)
-      .run();
-
-    // 3. 授予私有角色与标准普通用户角色
-    await this.db
-      .prepare('INSERT INTO user_roles (user_id, role_id, granted_by, granted_at) VALUES (?, ?, ?, ?)')
-      .bind(userId, privateRoleId, 'SYSTEM', now)
+      .prepare('INSERT OR IGNORE INTO roles (id, name, description, is_system, created_at) VALUES (?, ?, ?, 0, ?)')
+      .bind(privateRoleId, `ROLE_${username.toUpperCase()}`, `User ${username}'s private ownership role`, now)
       .run();
 
     await this.db
       .prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id, granted_by, granted_at) VALUES (?, ?, ?, ?)')
-      .bind(userId, 'rol_user', 'SYSTEM', now)
+      .bind(userId, privateRoleId, 'MYAUTH_SSO', now)
       .run();
 
-    // 4. 签发会话 Token
+    await this.db
+      .prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id, granted_by, granted_at) VALUES (?, ?, ?, ?)')
+      .bind(userId, 'rol_user', 'MYAUTH_SSO', now)
+      .run();
+
+    // 3. 同步来自 myauth 的系统特权角色 (如 rol_accountadmin / rol_admin)
+    if (Array.isArray(ssoUser.roles)) {
+      for (const roleId of ssoUser.roles) {
+        if (roleId === 'rol_accountadmin' || roleId === 'rol_admin') {
+          await this.db
+            .prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id, granted_by, granted_at) VALUES (?, ?, ?, ?)')
+            .bind(userId, roleId, 'MYAUTH_SSO', now)
+            .run();
+        }
+      }
+    }
+
+    // 4. 查询当前用户拥有的角色
+    const roleRows = await this.db
+      .prepare('SELECT role_id FROM user_roles WHERE user_id = ?')
+      .bind(userId)
+      .all<{ role_id: string }>();
+
+    const roleIds = roleRows.results ? roleRows.results.map((r) => r.role_id) : [privateRoleId, 'rol_user'];
+    const currentRoleId = roleIds.includes('rol_accountadmin') ? 'rol_accountadmin' : (roleIds[0] || privateRoleId);
+
+    // 5. 签发本地 Session (7天有效)
     const sessionToken = `ses_${crypto.randomUUID().replace(/-/g, '')}`;
-    const expiresAt = now + 1000 * 60 * 60 * 24 * 7; // 7 天有效
+    const expiresAt = now + 1000 * 60 * 60 * 24 * 7;
 
     await this.db
       .prepare('INSERT INTO sessions (id, user_id, current_role_id, expires_at) VALUES (?, ?, ?, ?)')
-      .bind(sessionToken, userId, privateRoleId, expiresAt)
+      .bind(sessionToken, userId, currentRoleId, expiresAt)
       .run();
 
     return {
       sessionToken,
       session: {
         userId,
-        username: trimmed,
-        currentRoleId: privateRoleId,
-        roles: [privateRoleId, 'rol_user'],
-      },
-    };
-  }
-
-  async login(username: string, password: string): Promise<{ sessionToken: string; session: UserSession }> {
-    const trimmed = username.trim().toLowerCase();
-    const user = await this.db
-      .prepare('SELECT id, username, password_hash, is_active FROM users WHERE username = ?')
-      .bind(trimmed)
-      .first<{ id: string; username: string; password_hash: string; is_active: number }>();
-
-    if (!user || user.is_active !== 1) {
-      throw new Error('用户名或密码错误');
-    }
-
-    const isValid = await AuthService.verifyPassword(password, user.password_hash);
-    if (!isValid) {
-      throw new Error('用户名或密码错误');
-    }
-
-    // 获取用户拥有的角色列表
-    const roleRows = await this.db
-      .prepare('SELECT role_id FROM user_roles WHERE user_id = ?')
-      .bind(user.id)
-      .all<{ role_id: string }>();
-
-    const roleIds = roleRows.results ? roleRows.results.map((r) => r.role_id) : [];
-    const currentRoleId = roleIds[0] || 'rol_public';
-
-    const sessionToken = `ses_${crypto.randomUUID().replace(/-/g, '')}`;
-    const now = Date.now();
-    const expiresAt = now + 1000 * 60 * 60 * 24 * 7;
-
-    await this.db
-      .prepare('INSERT INTO sessions (id, user_id, current_role_id, expires_at) VALUES (?, ?, ?, ?)')
-      .bind(sessionToken, user.id, currentRoleId, expiresAt)
-      .run();
-
-    return {
-      sessionToken,
-      session: {
-        userId: user.id,
-        username: user.username,
+        username,
         currentRoleId,
         roles: roleIds,
       },
     };
   }
+
+  // -------------------------------------------------------------
+  // 本地 Session 快速验证与销毁
+  // -------------------------------------------------------------
 
   async validateSession(sessionToken: string): Promise<UserSession | null> {
     const session = await this.db

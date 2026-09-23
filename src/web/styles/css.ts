@@ -680,7 +680,8 @@ body, .app-body {
   border: 1px solid rgba(239, 68, 68, 0.2);
 }
 
-.card-delete-icon-btn {
+.card-delete-icon-btn,
+.card-share-icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -696,7 +697,8 @@ body, .app-body {
   opacity: 0.65;
 }
 
-.bento-card:hover .card-delete-icon-btn {
+.bento-card:hover .card-delete-icon-btn,
+.bento-card:hover .card-share-icon-btn {
   opacity: 1;
 }
 
@@ -704,6 +706,13 @@ body, .app-body {
   background-color: rgba(239, 68, 68, 0.15);
   color: #ef4444;
   border-color: rgba(239, 68, 68, 0.3);
+  transform: scale(1.12);
+}
+
+.card-share-icon-btn:hover {
+  background-color: rgba(14, 165, 233, 0.15);
+  color: var(--accent-color);
+  border-color: rgba(14, 165, 233, 0.3);
   transform: scale(1.12);
 }
 
@@ -1955,8 +1964,11 @@ body, .app-body {
   box-shadow: 0 4px 14px rgba(14, 165, 233, 0.45);
 }
 
-.btn-copy-skill.btn-copied {
+.btn-copy-skill.btn-copied,
+.btn.btn-copied {
   background: #10b981 !important;
+  color: #ffffff !important;
+  border-color: #10b981 !important;
   box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35);
 }
 `;

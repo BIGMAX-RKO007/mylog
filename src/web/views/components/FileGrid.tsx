@@ -90,6 +90,32 @@ export const FileGrid: FC<FileGridProps> = ({ files, session }) => {
                   </span>
                 )}
 
+                {/* 快捷复制分享链接 */}
+                <button
+                  type="button"
+                  class="card-share-icon-btn"
+                  title={file.isPublic ? "复制公开文档链接" : "复制文档链接 (仅授权可见)"}
+                  onclick={`
+                    event.stopPropagation();
+                    event.preventDefault();
+                    const url = window.location.origin + '/files/${file.id}';
+                    navigator.clipboard.writeText(url).then(() => {
+                      const el = this;
+                      el.style.color = '#10b981';
+                      el.style.borderColor = 'rgba(16, 185, 129, 0.4)';
+                      setTimeout(() => {
+                        el.style.color = '';
+                        el.style.borderColor = '';
+                      }, 1500);
+                    });
+                  `}
+                >
+                  <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                </button>
+
                 {/* 登录用户展示快捷删除按钮 */}
                 {session && (
                   <button

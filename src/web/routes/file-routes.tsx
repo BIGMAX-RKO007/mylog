@@ -203,8 +203,8 @@ fileRoutes.get('/files/:id/raw', async (c) => {
   }
 });
 
-// 8. 切换公开分享状态
-fileRoutes.post('/files/:id/toggle-share', requireAuth, async (c) => {
+// 8. 切换公开/私有可见性状态 (公开：游客可读；私有：仅授权用户可读)
+const handleTogglePublic = async (c: any) => {
   const fileId = c.req.param('id');
   if (!fileId) return c.text('缺少文件ID', 400);
 
@@ -229,7 +229,10 @@ fileRoutes.post('/files/:id/toggle-share', requireAuth, async (c) => {
   } catch (err: any) {
     return c.text(err.message || '操作失败', 403);
   }
-});
+};
+
+fileRoutes.post('/files/:id/toggle-public', requireAuth, handleTogglePublic);
+fileRoutes.post('/files/:id/toggle-share', requireAuth, handleTogglePublic);
 
 // 9. 物理删除文档 (基于 Snowflake RBAC 鉴权，自动级联清理孤儿标签)
 fileRoutes.delete('/files/:id', requireAuth, async (c) => {

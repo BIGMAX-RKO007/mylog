@@ -66,13 +66,6 @@ export const DriveView: FC<DrivePageProps> = ({
                 </svg>
                 <span class="brand-name">mylog</span>
               </a>
-
-              <a href="/" class="reader-back-btn">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-                <span>返回知识库</span>
-              </a>
             </div>
 
             <div class="header-right">

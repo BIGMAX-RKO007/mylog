@@ -8,6 +8,9 @@ export interface Bindings {
   AUTH_SECRET?: string;
   AI?: any;
   TAG_VECTORS?: any;
+  AUTH_HUB_URL?: string;
+  MYAUTH_APP_ID?: string;
+  MYAUTH_CLIENT_SECRET?: string;
 }
 
 export interface UserSession {

@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { getCookie } from 'hono/cookie';
 import { AppContext } from './core/types';
 import { AuthService } from './services/auth-service';
 import { RbacService } from './services/rbac-service';
@@ -8,6 +7,7 @@ import { DocumentService } from './services/document-service';
 import { authRoutes } from './web/routes/auth-routes';
 import { fileRoutes } from './web/routes/file-routes';
 import { adminRbacRoutes } from './web/routes/admin-rbac-routes';
+import { ssoSessionMiddleware } from './web/middleware/edge-auth-guard';
 import { MAIN_CSS } from './web/styles/css';
 
 const app = new Hono<AppContext>();
@@ -22,7 +22,7 @@ app.get('/styles/main.css', (c) => {
   });
 });
 
-// 2. 全局服务注入 (DI Container: 经典三层服务) 与 认证中间件
+// 2. 全局服务注入 (DI Container: 经典三层服务) 与 myauth SSO 会话中间件
 app.use('*', async (c, next) => {
   const authService = new AuthService(c.env.DB);
   const rbacService = new RbacService(c.env.DB);
@@ -39,15 +39,7 @@ app.use('*', async (c, next) => {
     documentService,
   });
 
-  const sessionToken = getCookie(c, 'mylog_session');
-  if (sessionToken) {
-    const session = await authService.validateSession(sessionToken);
-    if (session) {
-      c.set('session', session);
-    }
-  }
-
-  await next();
+  return ssoSessionMiddleware(c, next);
 });
 
 // 3. 挂载认证、文档与权限中心业务路由
@@ -127,6 +119,30 @@ app.get('/api/health-infra', async (c) => {
     } catch (err: any) {
       report.vectorize = { status: 'error', message: err.message || String(err) };
     }
+  }
+
+  // 4. 验证 myauth 统一认证中心连通性
+  const authHubUrl = c.env.AUTH_HUB_URL || 'https://bigmax.dpdns.org';
+  const appId = c.env.MYAUTH_APP_ID || 'app_mylog';
+  try {
+    const authPingStart = Date.now();
+    const authResp = await fetch(`${authHubUrl}/api/verify`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    report.myauth = {
+      status: authResp.status === 401 || authResp.ok ? 'healthy' : 'degraded',
+      authHubUrl,
+      appId,
+      httpStatus: authResp.status,
+      latencyMs: Date.now() - authPingStart,
+    };
+  } catch (err: any) {
+    report.myauth = {
+      status: 'error',
+      authHubUrl,
+      appId,
+      message: err.message || String(err),
+    };
   }
 
   return c.json(report);

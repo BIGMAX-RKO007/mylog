@@ -19,15 +19,15 @@ export const FileViewer: FC<FileViewerProps> = ({ metadata, parsed, isOwner }) =
       <div class="reader-back-bar">
         <a href="/" class="btn btn-sm">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
+            <path d="M19 12H5M12 19l-7-7 7-7" />
           </svg>
           <span>返回大厅网格</span>
         </a>
         <div style="display: flex; gap: 0.65rem; align-items: center;">
           <span class="card-views" style="font-size: 0.85rem;">
             <svg class="fire-vector-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2C10.5 4.5 9 6.8 9 9.5C9 12.8 11.2 14.5 12 15C12.8 14.5 15 12.8 15 9.5C15 6.8 13.5 4.5 12 2Z" fill="#f97316"/>
-              <path d="M12 22C6.5 22 3 17.5 3 12.5C3 8.2 6.2 5.1 8 3.5C8.3 4.8 8.9 6.2 9.8 7.3C10.8 8.5 12.1 9.4 12.5 11C13.2 9.8 13.8 8.4 14 7C16.5 9.2 19 12.2 19 15.5C19 19.5 16 22 12 22Z" stroke="#ea580c" stroke-width="1.8"/>
+              <path d="M12 2C10.5 4.5 9 6.8 9 9.5C9 12.8 11.2 14.5 12 15C12.8 14.5 15 12.8 15 9.5C15 6.8 13.5 4.5 12 2Z" fill="#f97316" />
+              <path d="M12 22C6.5 22 3 17.5 3 12.5C3 8.2 6.2 5.1 8 3.5C8.3 4.8 8.9 6.2 9.8 7.3C10.8 8.5 12.1 9.4 12.5 11C13.2 9.8 13.8 8.4 14 7C16.5 9.2 19 12.2 19 15.5C19 19.5 16 22 12 22Z" stroke="#ea580c" stroke-width="1.8" />
             </svg>
             <span class="views-count"><strong>{metadata.views || 0}</strong> 次阅读</span>
           </span>
@@ -104,25 +104,54 @@ verified: true
             <span>✨ 复制为 AI Skill</span>
           </button>
 
-          {/* 下载原始 MD */}
-          <a href={`/files/${metadata.id}/raw`} target="_blank" class="btn btn-sm">
-            💾 原始文件
+          {/* 1. 分享链接 (复制文档直达访问链接) */}
+          <button
+            id="share-link-btn"
+            class="btn btn-sm"
+            title={metadata.isPublic ? "复制公开文档链接，任何人均可打开查阅" : "复制文档链接，已登录并拥有权限的用户可打开查阅"}
+            onclick={`
+              const url = window.location.origin + '/files/${metadata.id}';
+              if (navigator.share) {
+                navigator.share({
+                  title: ${JSON.stringify(metadata.title || metadata.name)},
+                  url: url
+                }).catch(() => {});
+              }
+              navigator.clipboard.writeText(url).then(() => {
+                const btn = document.getElementById('share-link-btn');
+                const oldHtml = btn.innerHTML;
+                btn.innerHTML = '✓ 链接已复制';
+                btn.classList.add('btn-copied');
+                setTimeout(() => {
+                  btn.innerHTML = oldHtml;
+                  btn.classList.remove('btn-copied');
+                }, 2000);
+              });
+            `}
+          >
+            <span>🔗 分享链接</span>
+          </button>
+
+          {/* 2. 下载保存原始 MD */}
+          <a href={`/files/${metadata.id}/raw`} target="_blank" class="btn btn-sm" title="下载保存原始 Markdown 文件">
+            💾 保存文件
           </a>
 
           {/* 拥有者特有控制权 (Snowflake OWNERSHIP 特权) */}
           {isOwner && (
             <>
-              {/* 一键切换公开只读 (赋予/撤销 PUBLIC 角色的 READ 特权) */}
+              {/* 3. 切换公开/私有可见性 (公开：游客可读；私有：仅授权用户可读) */}
               <button
                 class="btn btn-sm"
-                hx-post={`/files/${metadata.id}/toggle-share`}
+                hx-post={`/files/${metadata.id}/toggle-public`}
                 hx-target="#file-viewer-content"
                 hx-swap="outerHTML"
+                title={metadata.isPublic ? "当前为公开状态，点击将设为私有（仅自己和授权角色可见）" : "当前为私有状态，点击将设为公开（未登录游客也可直接阅读）"}
               >
-                {metadata.isPublic ? '🔒 设为私有' : '🔗 公开分享'}
+                {metadata.isPublic ? '🔒 设为私有' : '🌐 设为公开'}
               </button>
 
-              {/* 删除按钮 */}
+              {/* 4. 删除文档 */}
               <button
                 class="btn btn-sm btn-danger"
                 hx-delete={`/files/${metadata.id}`}

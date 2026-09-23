@@ -1,24 +1,37 @@
 import { Hono } from 'hono';
 import { setCookie, deleteCookie, getCookie } from 'hono/cookie';
-import { AuthPage } from '../views/auth-views';
 import { AppContext } from '../../core/types';
+import { exchangeSsoTicket, getSsoAuthorizeUrl } from '../middleware/edge-auth-guard';
 
 export const authRoutes = new Hono<AppContext>();
 
+// 1. 登录入口：引导至 myauth 统一授权中心
 authRoutes.get('/login', (c) => {
   const session = c.get('session');
   if (session) return c.redirect('/');
-  return c.html(<AuthPage mode="login" />);
+
+  const authHubUrl = c.env.AUTH_HUB_URL || 'https://bigmax.dpdns.org';
+  const appId = c.env.MYAUTH_APP_ID || 'app_mylog';
+  const redirectUri = c.req.query('redirect') || 'https://blog.bigmax.dpdns.org/';
+  const ssoUrl = getSsoAuthorizeUrl(authHubUrl, appId, redirectUri);
+  return c.redirect(ssoUrl);
 });
 
-authRoutes.post('/login', async (c) => {
-  const { authService } = c.get('services');
-  const body = await c.req.parseBody<{ username?: string; password?: string }>();
-  const username = body.username || '';
-  const password = body.password || '';
+// 2. 统一 SSO 回调处理 (供子应用显式跳转或探针回调)
+authRoutes.get('/auth/callback', async (c) => {
+  const ticket = c.req.query('ticket');
+  if (!ticket) {
+    return c.redirect('/');
+  }
 
-  try {
-    const { sessionToken } = await authService.login(username, password);
+  const authHubUrl = c.env.AUTH_HUB_URL || 'https://bigmax.dpdns.org';
+  const appId = c.env.MYAUTH_APP_ID || 'app_mylog';
+  const clientSecret = c.env.MYAUTH_CLIENT_SECRET || 'sec_ee78fe3728e742a4a40d825f';
+  const { authService } = c.get('services');
+
+  const exchange = await exchangeSsoTicket(authHubUrl, appId, clientSecret, ticket);
+  if (exchange.success && exchange.user) {
+    const { sessionToken, session } = await authService.syncSsoUser(exchange.user);
 
     const isProd = c.req.url.startsWith('https://');
     setCookie(c, 'mylog_session', sessionToken, {
@@ -28,43 +41,23 @@ authRoutes.post('/login', async (c) => {
       sameSite: 'Lax',
       maxAge: 60 * 60 * 24 * 7,
     });
-
-    return c.redirect('/');
-  } catch (err: any) {
-    return c.html(<AuthPage mode="login" error={err.message || '登录失败'} />, 400);
+    c.set('session', session);
   }
+
+  return c.redirect('/');
 });
 
+// 3. 注册入口：引导至 myauth 统一注册中心
 authRoutes.get('/register', (c) => {
   const session = c.get('session');
   if (session) return c.redirect('/');
-  return c.html(<AuthPage mode="register" />);
+
+  const authHubUrl = c.env.AUTH_HUB_URL || 'https://bigmax.dpdns.org';
+  const redirectUri = encodeURIComponent('https://blog.bigmax.dpdns.org/');
+  return c.redirect(`${authHubUrl}/register?redirect=${redirectUri}`);
 });
 
-authRoutes.post('/register', async (c) => {
-  const { authService } = c.get('services');
-  const body = await c.req.parseBody<{ username?: string; password?: string }>();
-  const username = body.username || '';
-  const password = body.password || '';
-
-  try {
-    const { sessionToken } = await authService.register(username, password);
-
-    const isProd = c.req.url.startsWith('https://');
-    setCookie(c, 'mylog_session', sessionToken, {
-      path: '/',
-      httpOnly: true,
-      secure: isProd,
-      sameSite: 'Lax',
-      maxAge: 60 * 60 * 24 * 7,
-    });
-
-    return c.redirect('/');
-  } catch (err: any) {
-    return c.html(<AuthPage mode="register" error={err.message || '注册失败'} />, 400);
-  }
-});
-
+// 4. 退出登录：清除本地 Session 并联动登出 myauth 统一中心
 authRoutes.get('/logout', async (c) => {
   const { authService } = c.get('services');
   const sessionToken = getCookie(c, 'mylog_session');
@@ -72,5 +65,8 @@ authRoutes.get('/logout', async (c) => {
     await authService.logout(sessionToken);
     deleteCookie(c, 'mylog_session', { path: '/' });
   }
-  return c.redirect('/login');
+
+  const authHubUrl = c.env.AUTH_HUB_URL || 'https://bigmax.dpdns.org';
+  const returnUrl = encodeURIComponent('https://blog.bigmax.dpdns.org/');
+  return c.redirect(`${authHubUrl}/logout?redirect=${returnUrl}`);
 });

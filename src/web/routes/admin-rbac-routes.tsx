@@ -15,6 +15,10 @@ export const adminRbacRoutes = new Hono<AppContext>();
 adminRbacRoutes.use('/admin/*', async (c, next) => {
   const session = c.get('session');
   if (!session) {
+    if (c.req.header('HX-Request')) {
+      c.header('HX-Redirect', '/login');
+      return c.text('', 401);
+    }
     return c.redirect('/login');
   }
 
