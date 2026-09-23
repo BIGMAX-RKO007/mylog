@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "dev:remote": "wrangler dev --remote",
     "build": "tsc --noEmit",
     "deploy": "wrangler deploy",
     "test": "vitest run",
+    "test:watch": "vitest",
     "d1:migrate:local": "wrangler d1 migrations apply DB --local",
     "d1:migrate:remote": "wrangler d1 migrations apply DB --remote"
   },
