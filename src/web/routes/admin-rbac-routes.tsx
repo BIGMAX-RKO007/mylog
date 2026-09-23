@@ -7,7 +7,7 @@ import {
   ForbiddenView,
   UserRolesTable,
 } from '../views/admin/RbacDashboardView';
-import { Privilege } from '../../modules/iam/domain/types';
+import { Privilege } from '../../services/rbac-service';
 
 export const adminRbacRoutes = new Hono<AppContext>();
 
@@ -31,14 +31,14 @@ adminRbacRoutes.use('/admin/*', async (c, next) => {
  */
 adminRbacRoutes.get('/admin/rbac', async (c) => {
   const session = c.get('session')!;
-  const services = c.get('services');
+  const { rbacService, authService, documentService } = c.get('services');
 
   const [roles, grants, userRoles, users, files] = await Promise.all([
-    services.d1RbacRepo.getAllRolesWithUsers(),
-    services.d1RbacRepo.getAllGrantsMatrix(),
-    services.d1RbacRepo.getAllUserRoleAssignments(),
-    services.d1UserRepo.listAllUsers(),
-    services.docRepo.listAll(),
+    rbacService.getAllRolesWithUsers(),
+    rbacService.getAllGrantsMatrix(),
+    rbacService.getAllUserRoleAssignments(),
+    authService.listAllUsers(),
+    documentService.listAccessible(session.userId),
   ]);
 
   return c.html(
@@ -58,7 +58,7 @@ adminRbacRoutes.get('/admin/rbac', async (c) => {
  */
 adminRbacRoutes.post('/admin/rbac/grant', async (c) => {
   const session = c.get('session')!;
-  const services = c.get('services');
+  const { rbacService } = c.get('services');
   const body = await c.req.parseBody();
 
   const objectId = String(body['objectId'] || '').trim();
@@ -66,14 +66,14 @@ adminRbacRoutes.post('/admin/rbac/grant', async (c) => {
   const privilege = String(body['privilege'] || '').trim() as Privilege;
 
   if (!objectId || !roleId || !privilege) {
-    const grants = await services.d1RbacRepo.getAllGrantsMatrix();
+    const grants = await rbacService.getAllGrantsMatrix();
     return c.html(<GrantsTable grants={grants} />);
   }
 
   // 写入 Snowflake 授权
-  await services.d1RbacRepo.grantPrivilege(roleId, objectId, privilege, session.userId);
+  await rbacService.grantPrivilege(roleId, objectId, privilege, session.userId);
 
-  const updatedGrants = await services.d1RbacRepo.getAllGrantsMatrix();
+  const updatedGrants = await rbacService.getAllGrantsMatrix();
   return c.html(<GrantsTable grants={updatedGrants} />);
 });
 
@@ -81,15 +81,15 @@ adminRbacRoutes.post('/admin/rbac/grant', async (c) => {
  * 撤销特权 (REVOKE)
  */
 adminRbacRoutes.post('/admin/rbac/revoke', async (c) => {
-  const services = c.get('services');
+  const { rbacService } = c.get('services');
   const body = await c.req.parseBody();
   const grantId = String(body['grantId'] || '').trim();
 
   if (grantId) {
-    await services.d1RbacRepo.revokeGrantById(grantId);
+    await rbacService.revokeGrantById(grantId);
   }
 
-  const updatedGrants = await services.d1RbacRepo.getAllGrantsMatrix();
+  const updatedGrants = await rbacService.getAllGrantsMatrix();
   return c.html(<GrantsTable grants={updatedGrants} />);
 });
 
@@ -97,7 +97,7 @@ adminRbacRoutes.post('/admin/rbac/revoke', async (c) => {
  * 实时特权模拟诊断器 (Privilege Simulator)
  */
 adminRbacRoutes.post('/admin/rbac/test', async (c) => {
-  const services = c.get('services');
+  const { rbacService, authService, documentService } = c.get('services');
   const body = await c.req.parseBody();
 
   const userId = String(body['userId'] || '').trim();
@@ -109,12 +109,12 @@ adminRbacRoutes.post('/admin/rbac/test', async (c) => {
 
   try {
     const [diagnosis, users, file] = await Promise.all([
-      services.d1RbacRepo.diagnosePrivileges(userId, objectId),
-      services.d1UserRepo.listAllUsers(),
-      services.docRepo.findById(objectId),
+      rbacService.diagnosePrivileges(userId, objectId),
+      authService.listAllUsers(),
+      documentService.findById(objectId),
     ]);
 
-    const targetUser = users.find((u: { id: string; username: string }) => u.id === userId);
+    const targetUser = users.find((u) => u.id === userId);
     const targetFileTitle = file?.title || file?.name || objectId;
 
     return c.html(
@@ -134,17 +134,17 @@ adminRbacRoutes.post('/admin/rbac/test', async (c) => {
  */
 adminRbacRoutes.post('/admin/rbac/user-role/assign', async (c) => {
   const session = c.get('session')!;
-  const services = c.get('services');
+  const { rbacService } = c.get('services');
   const body = await c.req.parseBody();
 
   const userId = String(body['userId'] || '').trim();
   const roleId = String(body['roleId'] || '').trim();
 
   if (userId && roleId) {
-    await services.d1RbacRepo.assignRoleToUser(userId, roleId, session.userId);
+    await rbacService.assignRoleToUser(userId, roleId, session.userId);
   }
 
-  const updatedUserRoles = await services.d1RbacRepo.getAllUserRoleAssignments();
+  const updatedUserRoles = await rbacService.getAllUserRoleAssignments();
   return c.html(<UserRolesTable userRoles={updatedUserRoles} currentUserId={session.userId} />);
 });
 
@@ -153,7 +153,7 @@ adminRbacRoutes.post('/admin/rbac/user-role/assign', async (c) => {
  */
 adminRbacRoutes.post('/admin/rbac/user-role/revoke', async (c) => {
   const session = c.get('session')!;
-  const services = c.get('services');
+  const { rbacService } = c.get('services');
   const body = await c.req.parseBody();
 
   const userId = String(body['userId'] || '').trim();
@@ -162,10 +162,10 @@ adminRbacRoutes.post('/admin/rbac/user-role/revoke', async (c) => {
   if (userId && roleId) {
     // 保护：防止唯一管理员把自己撤销导致死锁
     if (!(userId === session.userId && roleId === 'rol_accountadmin')) {
-      await services.d1RbacRepo.revokeRoleFromUser(userId, roleId);
+      await rbacService.revokeRoleFromUser(userId, roleId);
     }
   }
 
-  const updatedUserRoles = await services.d1RbacRepo.getAllUserRoleAssignments();
+  const updatedUserRoles = await rbacService.getAllUserRoleAssignments();
   return c.html(<UserRolesTable userRoles={updatedUserRoles} currentUserId={session.userId} />);
 });

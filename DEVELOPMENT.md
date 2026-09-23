@@ -41,91 +41,73 @@
 
 ---
 
-## 二、六边形架构与 DDD 模块全景
+## 二、经典三层服务架构与 HDA 组件全景
 
-系统严格遵循 **六边形架构 (Hexagonal Architecture / Ports & Adapters)** 与 **领域驱动设计 (DDD)** 规范，将纯粹的业务逻辑与底层云厂商设施解耦：
+项目采用 **经典三层服务架构（Route ➔ Service ➔ Database）** 与 **超媒体驱动组件架构（HDA / HTMX + SSR JSX）**，彻底剔除了重型 DDD 的冗余层级与中间商，直观高效：
 
 ```mermaid
 graph TD
-    Client["客户端 (Browser / HTMX / cURL)"]
+    Client["客户端 (Browser / HTMX 局部刷新)"]
     
-    subgraph Web["Web 交付层 (src/web)"]
-        Routes["Hono 路由切面 (auth, file, rbac, category)"]
-        Views["JSX 服务端渲染组件 (FileGrid, DriveView, FileViewer)"]
+    subgraph Presentation["1. Web 展现与路由层 (src/web)"]
+        Routes["Hono 路由 (auth-routes, file-routes, admin-rbac-routes)"]
+        Views["JSX 服务端渲染组件 (FileGrid, DriveView, FileViewer, RbacDashboard)"]
         Styles["Bento Box 全局 CSS 规范 (MAIN_CSS)"]
     end
 
-    subgraph App["应用层 (src/modules/*/application)"]
-        CommitDoc["CommitDocumentUseCase (双轨提取 + 标签收敛)"]
-        GetDoc["GetDocumentUseCase (阅读 + TOC 生成)"]
-        DeleteDoc["DeleteDocumentUseCase (权限校验 + 级联删除)"]
-        SmartSearch["SmartSearchUseCase (AI 意图拓展 + 混合检索)"]
-        AuthUser["AuthenticateUserUseCase (密码哈希 + 会话签发)"]
-        CheckPerm["CheckPermissionUseCase (递归权限鉴定)"]
+    subgraph ServiceLayer["2. 业务服务层 (src/services) - 系统三大核心大脑"]
+        AuthSvc["AuthService<br/>(注册、PBKDF2加盐哈希、Session校验)"]
+        RbacSvc["RbacService<br/>(Snowflake 继承解析、递归 CTE 鉴权、管理员全局旁路)"]
+        DocSvc["DocumentService<br/>(文档CRUD、双轨AI提取、四步标签向量收敛、孤儿清理)"]
     end
 
-    subgraph Domain["领域层 (src/modules/*/domain)"]
-        MetaExtractor["MetadataExtractor (Frontmatter / AI / 启发式)"]
-        TagNormalizer["TagNormalizer (词法清洗 / 字典映射 / 向量聚类)"]
-        RBAC["Snowflake RbacEngine (继承解析 / 权限评估)"]
-        EventBus["Global EventBus (轻量异步领域事件总线)"]
+    subgraph Infrastructure["3. 边缘数据基础设施 (D1 + AI + Vectorize)"]
+        D1[("Cloudflare D1 关系型数据库")]
+        CF_AI["Cloudflare Workers AI (Llama 3.2 + BGE 768)"]
+        CF_Vec["Cloudflare Vectorize 标签向量库"]
     end
 
-    subgraph Ports["端口契约 (src/modules/*/ports)"]
-        DocPort["DocumentRepositoryPort"]
-        StoragePort["StoragePort"]
-        RbacPort["RbacRepositoryPort"]
-        UserPort["UserRepositoryPort"]
-    end
-
-    subgraph Adapters["基础设施适配器 (src/modules/*/infrastructure)"]
-        D1Doc["D1DocumentRepository"]
-        D1Storage["D1StorageAdapter (基于 D1 file_contents)"]
-        D1Rbac["D1RbacRepository (递归 CTE SQL)"]
-        D1User["D1UserRepository"]
-        CF_AI["Cloudflare Workers AI 客户端"]
-        CF_Vec["Cloudflare Vectorize 适配器"]
-    end
-
-    Client -->|HTTP / HTMX| Web
-    Web --> App
-    App --> Domain
-    App --> Ports
-    Ports <|.. Adapters
-    Adapters --> D1Doc
-    Adapters --> D1Storage
-    Adapters --> D1Rbac
-    Adapters --> CF_AI
-    Adapters --> CF_Vec
+    Client -->|HTTP / HTMX 局部请求| Routes
+    Routes --> Views
+    Routes --> AuthSvc
+    Routes --> RbacSvc
+    Routes --> DocSvc
+    AuthSvc --> D1
+    RbacSvc --> D1
+    DocSvc --> D1
+    DocSvc --> CF_AI
+    DocSvc --> CF_Vec
 ```
 
-### 源码目录职能映射表
+### 源码目录职能映射表 (极简 18 文件)
 
 ```text
 src/
-├── core/                           # 核心基底
-│   ├── event-bus.ts                # 全局轻量事件总线 (发布 DocumentCommittedEvent 等)
-│   ├── result.ts                   # 函数式 Result<T, E> 模式 (禁止散乱的 throw)
-│   └── types.ts                    # 全局 Env Bindings、Session 与 Context 定义
-├── index.tsx                       # 应用根入口：DI 依赖注入容器、错误兜底与 /api/health-infra 探针
-├── modules/
-│   ├── iam/                        # 身份认证与权限管理 (Snowflake RBAC)
-│   │   ├── domain/                 # 角色继承模型、特权枚举 (READ, WRITE, DELETE, OWNERSHIP)
-│   │   ├── ports/                  # RbacRepositoryPort, UserRepositoryPort
-│   │   ├── application/            # 登录、注册、权限检查用例
-│   │   └── infrastructure/         # D1 用户与 RBAC 仓储 (含递归 CTE 算法)
-│   └── document/                   # 文档资产与知识库模块
-│       ├── domain/                 # 核心提取器与收敛器
-│       │   ├── metadata-extractor.ts   # 双轨元数据提炼引擎 (YAML/AI/Heuristic)
-│       │   ├── tag-normalizer.ts       # 四步标签防膨胀收敛引擎 (Lexical/Dict/Vectorize)
-│       │   └── types.ts                # DocumentMetadata, ParsedDocument
-│       ├── ports/                  # DocumentRepositoryPort, StoragePort
-│       ├── application/            # 提交文档、预览、获取、删除、智能搜索用例
-│       └── infrastructure/         # D1 存储适配器、D1 标签仓储、D1 分类仓储
-└── web/                            # Web 交付终端
-    ├── routes/                     # Hono 路由 (auth-routes, file-routes, admin-rbac-routes)
-    ├── views/                      # Bento Box 页面视图与 HTMX 局部卡片组件
-    └── styles/                     # Bento Box 现代毛玻璃样式表
+├── core/
+│   └── types.ts                      # 全局 Bindings, Session 与 AppServices 强类型定义
+├── index.tsx                         # 应用根入口：中间件注入 3 个服务 + /api/health-infra 探针
+├── services/                         # ⭐ 系统三大核心大脑
+│   ├── auth-service.ts               # 用户注册、PBKDF2 加盐哈希、Session 校验
+│   ├── rbac-service.ts               # Snowflake 继承解析、递归 CTE 鉴权、管理员全局旁路
+│   └── document-service.ts           # 文档全生命周期 (CRUD + 双轨元数据 + 4步标签收敛 + 孤儿清理)
+└── web/                              # Web 交付终端
+    ├── middleware/
+    │   └── auth-middleware.ts        # 登录态拦截与重定向
+    ├── routes/                       # 仅保留 3 个业务路由
+    │   ├── auth-routes.tsx           # 登录 / 注册 / 登出
+    │   ├── file-routes.tsx           # 知识库主舞台、搜索、阅读、上传预览、删除
+    │   └── admin-rbac-routes.tsx     # RBAC 权限管理控制面板
+    ├── styles/                       # Bento 样式表 (css.ts, main.css)
+    └── views/                        # JSX 服务端渲染组件 (HDA / HTMX)
+        ├── layout.tsx
+        ├── drive-view.tsx            # Bento 网格整页视图
+        ├── auth-views.tsx
+        ├── admin/
+        │   └── RbacDashboardView.tsx
+        └── components/
+            ├── FileGrid.tsx          # 卡片网格局部组件 (带删除按钮)
+            ├── FileViewer.tsx        # 沉浸式阅读器与 TOC
+            └── UploadModal.tsx       # 干净的单步上传入库模态框
 ```
 
 ---

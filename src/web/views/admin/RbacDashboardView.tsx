@@ -6,8 +6,8 @@ import {
   GrantMatrixItem,
   PrivilegeDiagnosis,
   UserRoleAssignment,
-} from '../../../modules/iam/ports/rbac-repository';
-import { DocumentMetadata } from '../../../modules/document/domain/types';
+} from '../../../services/rbac-service';
+import { DocumentMetadata } from '../../../services/document-service';
 
 interface RbacDashboardProps {
   roles: RoleDetail[];

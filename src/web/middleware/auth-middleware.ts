@@ -1,13 +1,13 @@
 import { Context, Next } from 'hono';
 import { getCookie } from 'hono/cookie';
-import { AuthenticateUserUseCase } from '../../modules/iam/application/authenticate-user';
+import { AuthService } from '../../services/auth-service';
 import { AppContext } from '../../core/types';
 
-export function createAuthMiddleware(authUseCase: AuthenticateUserUseCase) {
+export function createAuthMiddleware(authService: AuthService) {
   return async (c: Context<AppContext>, next: Next) => {
     const sessionToken = getCookie(c, 'mylog_session');
     if (sessionToken) {
-      const session = await authUseCase.validateSession(sessionToken);
+      const session = await authService.validateSession(sessionToken);
       if (session) {
         c.set('session', session);
       }

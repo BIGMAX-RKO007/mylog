@@ -1,5 +1,5 @@
 import { FC } from 'hono/jsx';
-import { ParsedDocument } from '../../../modules/document/domain/types';
+import { ParsedDocument } from '../../../services/document-service';
 
 export interface UploadModalProps {
   isGuest?: boolean;
@@ -75,16 +75,13 @@ export const UploadModal: FC<UploadModalProps> = ({ isGuest }) => {
   );
 };
 
-import { CategoryTreeItem } from '../../../modules/document/domain/category';
-
 interface UploadPreviewProps {
   fileName: string;
   parsed: ParsedDocument;
   uploadToken: string;
-  categories?: CategoryTreeItem[];
 }
 
-export const UploadPreviewCard: FC<UploadPreviewProps> = ({ fileName, parsed, uploadToken, categories = [] }) => {
+export const UploadPreviewCard: FC<UploadPreviewProps> = ({ fileName, parsed, uploadToken }) => {
   return (
     <div>
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color);">

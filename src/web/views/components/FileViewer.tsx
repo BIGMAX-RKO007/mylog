@@ -1,5 +1,5 @@
 import { FC } from 'hono/jsx';
-import { DocumentMetadata, ParsedDocument } from '../../../modules/document/domain/types';
+import { DocumentMetadata, ParsedDocument } from '../../../services/document-service';
 
 interface FileViewerProps {
   metadata: DocumentMetadata;

@@ -2,14 +2,11 @@ import { FC } from 'hono/jsx';
 import { Layout } from './layout';
 import { FileGrid } from './components/FileGrid';
 import { FileViewer } from './components/FileViewer';
-import { DocumentMetadata, ParsedDocument } from '../../modules/document/domain/types';
+import { DocumentMetadata, ParsedDocument } from '../../services/document-service';
 import { UserSession } from '../../core/types';
-import { CategoryTreeItem } from '../../modules/document/domain/category';
 
 interface DrivePageProps {
   files: DocumentMetadata[];
-  categories?: CategoryTreeItem[];
-  selectedCategoryId?: string;
   selectedSort?: 'latest' | 'views';
   searchQuery?: string;
   popularTags?: { name: string; count: number }[];
@@ -25,8 +22,6 @@ interface DrivePageProps {
 
 export const DriveView: FC<DrivePageProps> = ({
   files,
-  categories = [],
-  selectedCategoryId = '',
   selectedSort = 'latest',
   searchQuery = '',
   popularTags = [],
@@ -161,7 +156,7 @@ export const DriveView: FC<DrivePageProps> = ({
                 hx-get="/files"
                 hx-trigger="keyup changed delay:250ms, search"
                 hx-target="#file-grid-container"
-                hx-include="#current-category-id, #current-sort-id, #current-tag-id"
+                hx-include="#current-sort-id, #current-tag-id"
                 hx-swap="innerHTML"
               />
 
@@ -219,7 +214,6 @@ export const DriveView: FC<DrivePageProps> = ({
       </header>
 
       {/* 隐藏状态字段供检索与排序联动 */}
-      <input type="hidden" id="current-category-id" name="categoryId" value={selectedCategoryId} />
       <input type="hidden" id="current-sort-id" name="sort" value={selectedSort} />
       <input type="hidden" id="current-tag-id" name="tag" value={selectedTag} />
 
@@ -307,7 +301,7 @@ export const DriveView: FC<DrivePageProps> = ({
                     document.getElementById('sort-btn-latest').classList.remove('active');
                   "
                   hx-get="/files?sort=views"
-                  hx-include="#current-category-id, #file-search-input"
+                  hx-include="#current-tag-id, #file-search-input"
                   hx-target="#file-grid-container"
                   hx-swap="innerHTML"
                 >
@@ -328,7 +322,7 @@ export const DriveView: FC<DrivePageProps> = ({
                     document.getElementById('sort-btn-views').classList.remove('active');
                   "
                   hx-get="/files?sort=latest"
-                  hx-include="#current-category-id, #file-search-input"
+                  hx-include="#current-tag-id, #file-search-input"
                   hx-target="#file-grid-container"
                   hx-swap="innerHTML"
                 >

@@ -1,5 +1,5 @@
 import { FC } from 'hono/jsx';
-import { DocumentMetadata } from '../../../modules/document/domain/types';
+import { DocumentMetadata } from '../../../services/document-service';
 import { UserSession } from '../../../core/types';
 
 interface FileGridProps {

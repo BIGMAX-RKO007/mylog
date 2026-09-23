@@ -1,11 +1,14 @@
+import { AuthService } from '../services/auth-service';
+import { RbacService } from '../services/rbac-service';
+import { DocumentService } from '../services/document-service';
+
 export interface Bindings {
   DB: D1Database;
-  STORAGE: R2Bucket;
+  STORAGE?: R2Bucket;
   AUTH_SECRET?: string;
   AI?: any;
   TAG_VECTORS?: any;
 }
-
 
 export interface UserSession {
   userId: string;
@@ -15,19 +18,10 @@ export interface UserSession {
 }
 
 export interface AppServices {
-  d1UserRepo: any;
-  d1RbacRepo: any;
-  docRepo: any;
-  storage: any;
-  authUseCase: any;
-  checkPermissionUseCase: any;
-  commitDocUseCase: any;
-  getDocUseCase: any;
-  deleteDocUseCase: any;
-  categoryRepo: any;
-  smartSearchUseCase: any;
+  authService: AuthService;
+  rbacService: RbacService;
+  documentService: DocumentService;
 }
-
 
 export interface AppVariables {
   session?: UserSession;
