@@ -3,10 +3,8 @@ main = "src/index.tsx"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# 自定义域名与路由配置
-routes = [
-  { pattern = "blog.bigmax.dpdns.org", custom_domain = true }
-]
+# 启用 workers.dev 默认边缘子域
+workers_dev = true
 
 # 统一身份认证中心 (myauth) 环境变量
 [vars]
