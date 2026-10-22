@@ -4,6 +4,7 @@ import { DrivePage, DriveView } from '../views/drive-view';
 import { FileGrid } from '../views/components/FileGrid';
 import { FileViewer } from '../views/components/FileViewer';
 import { UploadModal, UploadPreviewCard } from '../views/components/UploadModal';
+import { DocumentConverter } from '../../services/document-converter';
 import { AppContext } from '../../core/types';
 
 export const fileRoutes = new Hono<AppContext>();
@@ -68,20 +69,21 @@ fileRoutes.get('/files/upload-modal', (c) => {
   return c.html(<UploadModal isGuest={!session} />);
 });
 
-// 4. 解析并生成即时排版预览 (免二次网络上传)
+// 4. 解析并生成即时排版预览 (免二次网络上传，支持多格式文档与 Office)
 fileRoutes.post('/files/preview', async (c) => {
   const body = await c.req.parseBody();
   const file = body['file'];
   const { documentService } = c.get('services');
 
   if (!file || typeof file === 'string') {
-    return c.html(<div style="color: var(--danger-color); padding: 1rem;">⚠️ 请选择有效的 Markdown 文件</div>);
+    return c.html(<div style="color: var(--danger-color); padding: 1rem;">⚠️ 请选择有效的文档文件</div>);
   }
 
   const fileName = (file as File).name || 'document.md';
-  const content = await (file as File).text();
 
   try {
+    const arrayBuffer = await (file as File).arrayBuffer();
+    const content = await DocumentConverter.convertToMarkdown(fileName, arrayBuffer);
     const preview = await documentService.previewUpload(fileName, content);
     return c.html(
       <UploadPreviewCard

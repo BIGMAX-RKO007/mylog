@@ -26,21 +26,32 @@ export class AuthService {
     const username = ssoUser.username.trim().toLowerCase();
     const now = Date.now();
 
-    // 1. 确保用户在本地 D1 users 表中存在
-    const existingUser = await this.db
-      .prepare('SELECT id, is_active FROM users WHERE id = ?')
-      .bind(userId)
+    let effectiveUserId = userId;
+
+    // 1. 优先根据 username 检索存量用户，避免因已有相同用户名导致 UNIQUE constraint failed
+    const existingByUsername = await this.db
+      .prepare('SELECT id, is_active FROM users WHERE username = ?')
+      .bind(username)
       .first<{ id: string; is_active: number }>();
 
-    if (!existingUser) {
-      await this.db
-        .prepare('INSERT INTO users (id, username, password_hash, is_active, created_at) VALUES (?, ?, ?, 1, ?)')
-        .bind(userId, username, 'SSO_MANAGED_IDENTITY', now)
-        .run();
+    if (existingByUsername) {
+      effectiveUserId = existingByUsername.id;
+    } else {
+      const existingById = await this.db
+        .prepare('SELECT id, is_active FROM users WHERE id = ?')
+        .bind(userId)
+        .first<{ id: string; is_active: number }>();
+
+      if (!existingById) {
+        await this.db
+          .prepare('INSERT INTO users (id, username, password_hash, is_active, created_at) VALUES (?, ?, ?, 1, ?)')
+          .bind(userId, username, 'SSO_MANAGED_IDENTITY', now)
+          .run();
+      }
     }
 
     // 2. 确保私有角色和角色映射存在 (Snowflake 模式)
-    const privateRoleId = `rol_user_${userId.slice(4)}`;
+    const privateRoleId = `rol_user_${effectiveUserId.slice(4)}`;
     await this.db
       .prepare('INSERT OR IGNORE INTO roles (id, name, description, is_system, created_at) VALUES (?, ?, ?, 0, ?)')
       .bind(privateRoleId, `ROLE_${username.toUpperCase()}`, `User ${username}'s private ownership role`, now)
@@ -48,12 +59,12 @@ export class AuthService {
 
     await this.db
       .prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id, granted_by, granted_at) VALUES (?, ?, ?, ?)')
-      .bind(userId, privateRoleId, 'MYAUTH_SSO', now)
+      .bind(effectiveUserId, privateRoleId, 'MYAUTH_SSO', now)
       .run();
 
     await this.db
       .prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id, granted_by, granted_at) VALUES (?, ?, ?, ?)')
-      .bind(userId, 'rol_user', 'MYAUTH_SSO', now)
+      .bind(effectiveUserId, 'rol_user', 'MYAUTH_SSO', now)
       .run();
 
     // 3. 同步来自 myauth 的系统特权角色 (如 rol_accountadmin / rol_admin)
@@ -62,7 +73,7 @@ export class AuthService {
         if (roleId === 'rol_accountadmin' || roleId === 'rol_admin') {
           await this.db
             .prepare('INSERT OR IGNORE INTO user_roles (user_id, role_id, granted_by, granted_at) VALUES (?, ?, ?, ?)')
-            .bind(userId, roleId, 'MYAUTH_SSO', now)
+            .bind(effectiveUserId, roleId, 'MYAUTH_SSO', now)
             .run();
         }
       }
@@ -71,7 +82,7 @@ export class AuthService {
     // 4. 查询当前用户拥有的角色
     const roleRows = await this.db
       .prepare('SELECT role_id FROM user_roles WHERE user_id = ?')
-      .bind(userId)
+      .bind(effectiveUserId)
       .all<{ role_id: string }>();
 
     const roleIds = roleRows.results ? roleRows.results.map((r) => r.role_id) : [privateRoleId, 'rol_user'];
@@ -83,13 +94,13 @@ export class AuthService {
 
     await this.db
       .prepare('INSERT INTO sessions (id, user_id, current_role_id, expires_at) VALUES (?, ?, ?, ?)')
-      .bind(sessionToken, userId, currentRoleId, expiresAt)
+      .bind(sessionToken, effectiveUserId, currentRoleId, expiresAt)
       .run();
 
     return {
       sessionToken,
       session: {
-        userId,
+        userId: effectiveUserId,
         username,
         currentRoleId,
         roles: roleIds,

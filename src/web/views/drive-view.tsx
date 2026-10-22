@@ -336,10 +336,10 @@ export const DriveView: FC<DrivePageProps> = ({
         </section>
       </main>
 
-      {/* 4. 右下角呼吸高能光晕悬浮按钮 (Floating Action Button - FAB) */}
+      {/* 4. 右下角呼吸高能光晕悬浮按钮 (Floating Action Button - FAB，未登录时常态透明暗门) */}
       <button
-        class="fab-upload"
-        title="上传新的 Markdown 文档"
+        class={`fab-upload ${!session ? 'fab-stealth' : ''}`}
+        title={session ? '上传文档 (支持 MD / Word / 表格 / 代码)' : ''}
         hx-get="/files/upload-modal"
         hx-target="#modal-container"
         hx-swap="innerHTML"
@@ -349,7 +349,7 @@ export const DriveView: FC<DrivePageProps> = ({
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />
         </svg>
-        <span class="fab-label">上传 Markdown</span>
+        <span class="fab-label">上传文档</span>
       </button>
     </div>
   );

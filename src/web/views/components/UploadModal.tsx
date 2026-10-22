@@ -10,7 +10,7 @@ export const UploadModal: FC<UploadModalProps> = ({ isGuest }) => {
     <div id="upload-modal" class="modal-overlay" onclick="if(event.target === this) this.remove()">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 style="font-size: 1.1rem; font-weight: 600;">📤 上传 Markdown 文档</h3>
+          <h3 style="font-size: 1.1rem; font-weight: 600;">📤 上传知识库文档</h3>
           <button class="btn btn-sm" onclick="document.getElementById('upload-modal').remove()">✕</button>
         </div>
 
@@ -38,35 +38,33 @@ export const UploadModal: FC<UploadModalProps> = ({ isGuest }) => {
                 event.preventDefault();
                 this.classList.remove('dragover');
                 const file = event.dataTransfer.files[0];
-                if (file && (file.name.endsWith('.md') || file.name.endsWith('.markdown'))) {
+                if (file) {
                   const dt = new DataTransfer();
                   dt.items.add(file);
                   const fi = document.getElementById('file-input');
                   fi.files = dt.files;
                   htmx.trigger('#preview-upload-form', 'submit');
-                } else {
-                  alert('请上传 .md 或 .markdown 格式的文件');
                 }
               "
             >
               <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📄</div>
               <p style="font-weight: 600; font-size: 1rem; margin-bottom: 0.25rem;">
-                点击选择 或 拖拽 Markdown 文件至此
+                点击选择 或 拖拽文档文件至此
               </p>
-              <p style="font-size: 0.8rem; color: var(--text-secondary);">
-                仅支持纯粹的 .md 文本文件，选择后将立即为您生成排版预览
+              <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
+                支持 <strong>Markdown (.md)</strong>、<strong>Office (Word .docx / Excel .xlsx)</strong>、<strong>PDF (.pdf)</strong>、<strong>表格 (.csv)</strong> 与各类 <strong>代码源码与文本</strong>
               </p>
               <input
                 id="file-input"
                 type="file"
                 name="file"
-                accept=".md,.markdown,text/markdown"
+                accept=".md,.markdown,.docx,.xlsx,.pdf,.txt,.log,.json,.csv,.yaml,.yml,.py,.ts,.tsx,.js,.jsx,.sql,.sh,.ps1,.html,.css,.xml,.java,.go,.rs"
                 style="display: none;"
                 onchange="htmx.trigger('#preview-upload-form', 'submit')"
               />
             </div>
             <div id="upload-spinner" class="htmx-indicator" style="text-align: center; margin-top: 1rem; color: var(--text-secondary);">
-              ⏳ 正在解析 Markdown 排版并生成预览...
+              ⏳ 正在解析文档结构并生成排版预览...
             </div>
           </form>
         </div>

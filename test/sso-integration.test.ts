@@ -152,4 +152,39 @@ describe('myauth SSO Edge Auth Guard Tests', () => {
     await requireAuthGuard(ctx, next);
     expect(next).toHaveBeenCalledTimes(1);
   });
+
+  it('AuthService.syncSsoUser 遇到同名存量用户时复用已有 ID，避免 UNIQUE constraint 冲突', async () => {
+    const { AuthService } = await import('../src/services/auth-service');
+    const mockDb: any = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...params: any[]) => ({
+          first: vi.fn(async () => {
+            if (sql.includes('FROM users WHERE username = ?')) {
+              // 模拟存量用户
+              return { id: 'usr_c5f32ef9ffed4e76', is_active: 1 };
+            }
+            return null;
+          }),
+          all: vi.fn(async () => ({
+            results: [{ role_id: 'rol_user_c5f32ef9ffed4e76' }, { role_id: 'rol_accountadmin' }],
+          })),
+          run: vi.fn(async () => ({ success: true })),
+        })),
+      })),
+    };
+
+    const authService = new AuthService(mockDb);
+    const { session, sessionToken } = await authService.syncSsoUser({
+      id: 'usr_678da148f585454c', // myauth 传入的新 ID
+      username: 'fanxiao',
+      roles: ['rol_accountadmin'],
+    });
+
+    // 应该优雅复用本地已有 ID，杜绝 SQLITE_CONSTRAINT_UNIQUE
+    expect(session.userId).toBe('usr_c5f32ef9ffed4e76');
+    expect(session.username).toBe('fanxiao');
+    expect(session.roles).toContain('rol_accountadmin');
+    expect(sessionToken.startsWith('ses_')).toBe(true);
+  });
 });
+

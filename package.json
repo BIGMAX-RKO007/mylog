@@ -16,7 +16,10 @@
   "dependencies": {
     "hono": "^4.6.0",
     "htmx.org": "^2.0.3",
-    "marked": "^14.1.0"
+    "mammoth": "^1.13.0",
+    "marked": "^14.1.0",
+    "unpdf": "^1.9.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241022.0",

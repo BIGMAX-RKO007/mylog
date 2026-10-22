@@ -844,6 +844,23 @@ body, .app-body {
   letter-spacing: -0.01em;
 }
 
+/* 未登录状态下的暗门模式：常态 100% 透明隐藏，鼠标悬停时平滑浮现 */
+.fab-upload.fab-stealth {
+  opacity: 0;
+  box-shadow: none;
+  transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
+}
+
+.fab-upload.fab-stealth:hover {
+  opacity: 1;
+  transform: translateY(-4px) scale(1.04);
+  box-shadow: 0 18px 36px -4px rgba(249, 115, 22, 0.55), 0 8px 18px -2px rgba(2, 132, 199, 0.35);
+}
+
+.fab-upload.fab-stealth:active {
+  transform: scale(0.96);
+}
+
 /* ==========================================================================
    5. 沉浸式单篇文档阅读器 (Reader View)
    ========================================================================== */
