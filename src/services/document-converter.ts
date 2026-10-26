@@ -1,19 +1,24 @@
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
+import JSZip from 'jszip';
 
 export class DocumentConverter {
   /**
-   * 支持的文件后缀集合
+   * 支持的文件后缀集合（包含 Office、演示文稿、常见数据、代码以及网盘常见包格式）
    */
   public static readonly SUPPORTED_EXTENSIONS = [
     // Markdown
     'md', 'markdown',
+    // 演示文稿
+    'pptx', 'ppt',
     // Office 与 文档
     'docx', 'xlsx', 'pdf',
     // 结构化与表格数据
     'csv', 'json', 'yaml', 'yml', 'xml', 'toml',
     // 纯文本与日志
     'txt', 'log', 'ini', 'env',
+    // 常见压缩包与网盘文件
+    'zip', 'rar', '7z', 'tar', 'gz',
     // 常用编程代码
     'py', 'js', 'ts', 'jsx', 'tsx', 'html', 'css', 'sql',
     'sh', 'bash', 'ps1', 'java', 'go', 'rs', 'c', 'cpp', 'php', 'rb'
@@ -23,8 +28,7 @@ export class DocumentConverter {
    * 判断文件是否支持
    */
   public static isSupported(fileName: string): boolean {
-    const ext = this.getExtension(fileName);
-    return this.SUPPORTED_EXTENSIONS.includes(ext);
+    return true; // 网盘模式：全面允许上传任意文件
   }
 
   /**
@@ -37,7 +41,7 @@ export class DocumentConverter {
   }
 
   /**
-   * 将各类文件格式转换为统一的标准 Markdown 文本
+   * 将各类文件格式转换为统一的标准 Markdown 文本（网盘预览与语义理解底座）
    */
   public static async convertToMarkdown(fileName: string, buffer: ArrayBuffer): Promise<string> {
     const ext = this.getExtension(fileName);
@@ -48,6 +52,14 @@ export class DocumentConverter {
       case 'markdown': {
         const text = new TextDecoder('utf-8').decode(buffer);
         return text;
+      }
+
+      case 'pptx': {
+        return await this.convertPptx(baseName, buffer);
+      }
+
+      case 'ppt': {
+        return this.convertPpt(baseName, buffer);
       }
 
       case 'docx': {
@@ -107,14 +119,31 @@ export class DocumentConverter {
         return this.convertCode(baseName, ext, text);
       }
 
+      // 常见压缩包与网盘归档
+      case 'zip':
+      case 'rar':
+      case '7z':
+      case 'tar':
+      case 'gz': {
+        const sizeKb = (buffer.byteLength / 1024).toFixed(1);
+        return (
+          `# 📦 ${fileName}\n\n` +
+          `> 💾 **个人网盘压缩包资产** (格式: \`.${ext}\` | 大小: ${sizeKb} KB)\n\n` +
+          `本压缩包已安全归档至您的私有网盘。您可以随时在上方或右侧点击 **【下载原文件】** 获取完整二进制数据。`
+        );
+      }
+
       default: {
-        // 尝试作为普通文本兜底解析，若解码有明显乱码或空则报错
+        // 尝试作为文本解码，若失败则生成友好的个人网盘通用二进制文件预览卡片
         try {
           const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: false }).decode(buffer);
           return this.convertPlainText(baseName, text);
         } catch {
-          throw new Error(
-            `暂不支持解析格式 ".${ext}"。推荐上传 Markdown (.md)、Word (.docx)、表格 (.csv) 或纯文本代码文件。`
+          const sizeKb = (buffer.byteLength / 1024).toFixed(1);
+          return (
+            `# 📦 ${fileName}\n\n` +
+            `> 💾 **个人网盘文件** (格式: \`.${ext || 'bin'}\` | 大小: ${sizeKb} KB)\n\n` +
+            `本文件已安全存储至您的个人网盘中。您可以随时在上方或卡片右侧点击 **【下载原文件】** 获取完整二进制文件。`
           );
         }
       }
@@ -345,5 +374,87 @@ export class DocumentConverter {
     } catch (err: any) {
       throw new Error(`PDF 解析失败: ${err.message || String(err)}`);
     }
+  }
+
+  /**
+   * 将 PowerPoint .pptx 提取为结构化 Markdown 大纲
+   */
+  private static async convertPptx(baseName: string, buffer: ArrayBuffer): Promise<string> {
+    try {
+      const zip = await JSZip.loadAsync(buffer);
+      // 获取所有 slide 文件的路径，并按编号自然排序 (slide1.xml, slide2.xml, ...)
+      const slideFiles = Object.keys(zip.files)
+        .filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
+        .sort((a, b) => {
+          const numA = parseInt(a.match(/\d+/)![0], 10);
+          const numB = parseInt(b.match(/\d+/)![0], 10);
+          return numA - numB;
+        });
+
+      if (slideFiles.length === 0) {
+        return `# ${baseName}\n\n> 📊 **PPT 演示文稿**（未检测到幻灯片内容页面）\n`;
+      }
+
+      const slidesContent: string[] = [];
+      for (let i = 0; i < slideFiles.length; i++) {
+        const slidePath = slideFiles[i];
+        const xml = await zip.file(slidePath)?.async('text');
+        if (!xml) continue;
+
+        // 从 xml 中提取段落 <a:p>...</a:p>
+        const paragraphRegex = /<a:p\b[^>]*>([\s\S]*?)<\/a:p>/gi;
+        const paragraphs: string[] = [];
+        let pMatch;
+        while ((pMatch = paragraphRegex.exec(xml)) !== null) {
+          const pBody = pMatch[1];
+          const textRegex = /<a:t\b[^>]*>([\s\S]*?)<\/a:t>/gi;
+          let tMatch;
+          let pText = '';
+          while ((tMatch = textRegex.exec(pBody)) !== null) {
+            pText += tMatch[1];
+          }
+          const cleanP = pText.trim();
+          if (cleanP) {
+            paragraphs.push(cleanP);
+          }
+        }
+
+        const slideTitle = paragraphs[0] || `幻灯片 ${i + 1}`;
+        const slideBody =
+          paragraphs.length > 1
+            ? paragraphs
+                .slice(1)
+                .map((p) => `- ${p}`)
+                .join('\n')
+            : '';
+
+        slidesContent.push(`## 幻灯片 ${i + 1}: ${slideTitle}\n\n${slideBody}`);
+      }
+
+      return (
+        `# ${baseName}\n\n` +
+        `> 📊 **PowerPoint 演示文稿大纲**（共 ${slideFiles.length} 页幻灯片，已智能提取核心演讲点）\n\n` +
+        `---\n\n` +
+        slidesContent.join('\n\n---\n\n')
+      );
+    } catch (err: any) {
+      return (
+        `# ${baseName}\n\n` +
+        `> 📊 **PowerPoint 演示文稿**\n\n` +
+        `已安全存入个人网盘。解析提示: ${err.message || '文件已完整保存，可直接下载原文件'}`
+      );
+    }
+  }
+
+  /**
+   * 将旧版 PowerPoint .ppt 二进制文稿转换为 Markdown 占位卡片
+   */
+  private static convertPpt(baseName: string, buffer: ArrayBuffer): string {
+    const sizeKb = (buffer.byteLength / 1024).toFixed(1);
+    return (
+      `# 📊 ${baseName}.ppt\n\n` +
+      `> 💾 **PowerPoint 97-2003 演示文稿** (大小: ${sizeKb} KB)\n\n` +
+      `本文件为经典二进制 .ppt 演示文稿，已完整存入您的私有云盘中。您可以随时点击上方或右侧的 **【下载原文件】** 按钮获取原始文稿并在本地 Office 中播放。`
+    );
   }
 }

@@ -1023,6 +1023,248 @@ body, .app-body {
   border-top: 1px solid var(--card-border);
 }
 
+/* ==========================================================================
+   Master 极客暗门与解锁模态框 (Stealth Unlock Modal & Triggers)
+   ========================================================================== */
+.stealth-gate-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  opacity: 0.28;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stealth-gate-btn:hover {
+  opacity: 0.95;
+  color: var(--warm-orange);
+  background: var(--card-bg);
+  border-color: rgba(249, 115, 22, 0.35);
+  box-shadow: 0 2px 10px rgba(249, 115, 22, 0.2);
+  transform: scale(1.05);
+}
+
+.stealth-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+  padding: 1.5rem;
+}
+
+.stealth-modal-sheet {
+  background-color: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-bento);
+  max-width: 480px;
+  width: 100%;
+  padding: 2rem;
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.4);
+  animation: modalPop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  position: relative;
+}
+
+.stealth-sheet-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  position: relative;
+}
+
+.stealth-lock-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.15), rgba(14, 165, 233, 0.15));
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--warm-orange);
+  flex-shrink: 0;
+}
+
+.stealth-sheet-titles {
+  flex: 1;
+}
+
+.stealth-sheet-title {
+  font-size: 1.25rem;
+  font-weight: 750;
+  color: var(--text-title);
+  margin-bottom: 0.25rem;
+}
+
+.stealth-sheet-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.stealth-close-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.1rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.stealth-close-btn:hover {
+  color: var(--text-title);
+}
+
+.stealth-sheet-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.stealth-input-group {
+  position: relative;
+  width: 100%;
+}
+
+.stealth-password-input {
+  width: 100%;
+  height: 48px;
+  padding: 0 3.2rem 0 1rem;
+  font-size: 0.95rem;
+  font-family: var(--font-sans);
+  color: var(--text-title);
+  background-color: var(--bg-surface);
+  border: 1.5px solid var(--card-border);
+  border-radius: 12px;
+  outline: none;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stealth-password-input:focus {
+  border-color: var(--warm-orange);
+  box-shadow: 0 0 0 4px rgba(249, 115, 22, 0.15);
+  background-color: var(--card-bg);
+}
+
+.stealth-eye-btn {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+
+.stealth-eye-btn:hover {
+  color: var(--text-title);
+}
+
+.stealth-sheet-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.stealth-btn-cancel {
+  padding: 0.6rem 1.2rem;
+  border-radius: 10px;
+  background: transparent;
+  border: 1px solid var(--card-border);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.stealth-btn-cancel:hover {
+  background: var(--bg-surface);
+  color: var(--text-title);
+}
+
+.stealth-btn-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.4rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  border: none;
+  color: #ffffff;
+  font-size: 0.92rem;
+  font-weight: 650;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(249, 115, 22, 0.35);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.stealth-btn-submit:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(249, 115, 22, 0.45);
+}
+
+.stealth-sheet-tip {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 0.25rem;
+}
+
+.stealth-sheet-tip code {
+  font-family: var(--font-mono);
+  background: rgba(14, 165, 233, 0.1);
+  color: var(--primary-blue);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.bento-footer {
+  text-align: center;
+  padding: 3rem 1rem 1.5rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.footer-stealth-dot {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0 6px;
+  font-weight: 900;
+  opacity: 0.35;
+  transition: opacity 0.2s, color 0.2s;
+}
+
+.footer-stealth-dot:hover {
+  opacity: 1;
+  color: var(--warm-orange);
+}
+
 .dropzone {
   border: 2px dashed var(--card-border);
   border-radius: var(--radius-md);
@@ -1987,6 +2229,74 @@ body, .app-body {
   color: #ffffff !important;
   border-color: #10b981 !important;
   box-shadow: 0 2px 10px rgba(16, 185, 129, 0.35);
+}
+
+/* ==========================================================================
+   个人网盘与极客 Master 徽章专属样式
+   ========================================================================== */
+.master-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, rgba(249, 115, 22, 0.15), rgba(14, 165, 233, 0.15));
+  color: #f97316;
+  border: 1px solid rgba(249, 115, 22, 0.35);
+  box-shadow: 0 0 12px rgba(249, 115, 22, 0.15);
+  letter-spacing: 0.02em;
+}
+
+.card-download-btn:hover {
+  color: #10b981 !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+}
+
+.btn-primary-action {
+  background: linear-gradient(135deg, #10b981, #059669) !important;
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3) !important;
+}
+
+.btn-primary-action:hover {
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4) !important;
+  transform: translateY(-1px);
+}
+
+/* 多文件格式色彩标识 */
+.badge-fmt-ppt {
+  color: #ea580c !important;
+  background: rgba(234, 88, 12, 0.1) !important;
+  border: 1px solid rgba(234, 88, 12, 0.25) !important;
+}
+
+.badge-fmt-pdf {
+  color: #ef4444 !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+  border: 1px solid rgba(239, 68, 68, 0.25) !important;
+}
+
+.badge-fmt-word {
+  color: #2563eb !important;
+  background: rgba(37, 99, 235, 0.1) !important;
+  border: 1px solid rgba(37, 99, 235, 0.25) !important;
+}
+
+.badge-fmt-excel {
+  color: #059669 !important;
+  background: rgba(5, 150, 105, 0.1) !important;
+  border: 1px solid rgba(5, 150, 105, 0.25) !important;
+}
+
+.badge-fmt-archive {
+  color: #8b5cf6 !important;
+  background: rgba(139, 92, 246, 0.1) !important;
+  border: 1px solid rgba(139, 92, 246, 0.25) !important;
 }
 `;
 

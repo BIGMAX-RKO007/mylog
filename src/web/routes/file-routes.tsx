@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
+import { setCookie, deleteCookie } from 'hono/cookie';
 import { requireAuth } from '../middleware/auth-middleware';
+import { createMasterSessionToken } from '../middleware/edge-auth-guard';
 import { DrivePage, DriveView } from '../views/drive-view';
 import { FileGrid } from '../views/components/FileGrid';
 import { FileViewer } from '../views/components/FileViewer';
@@ -51,7 +53,7 @@ fileRoutes.get('/', async (c) => {
   );
 });
 
-// 2. 搜索、按标签筛选或排序刷新文件网格 (HTMX 局部刷新)
+// 2. 搜索、按标签筛选或排序刷新文件网格 (HTMX 局部刷新 & 搜索框极客暗门激活)
 fileRoutes.get('/files', async (c) => {
   const session = c.get('session');
   const { documentService } = c.get('services');
@@ -59,24 +61,60 @@ fileRoutes.get('/files', async (c) => {
   const tag = c.req.query('tag');
   const sort = (c.req.query('sort') as 'latest' | 'views') || 'latest';
 
+  // 极客搜索框暗门协议 (方案 A：隐蔽输入密钥激活 / 锁定退出)
+  if (q && q.trim().startsWith(':')) {
+    const trimmed = q.trim();
+
+    // 锁定指令: :lock
+    if (trimmed.toLowerCase() === ':lock') {
+      deleteCookie(c, 'mylog_master_session', { path: '/' });
+      deleteCookie(c, 'mylog_session', { path: '/' });
+      c.header('HX-Refresh', 'true');
+      return c.text('Locked');
+    }
+
+    // 解锁指令: :key <key> 或 :unlock <key> 或 :auth <key>
+    const unlockMatch = trimmed.match(/^:(?:key|unlock|auth)\s+(.+)$/i);
+    if (unlockMatch) {
+      const inputKey = unlockMatch[1].trim();
+      const masterKey = c.env.MASTER_KEY || 'mylog-master-key';
+      if (inputKey === masterKey) {
+        const token = await createMasterSessionToken(masterKey);
+        const isProd = c.req.url.startsWith('https://');
+        setCookie(c, 'mylog_master_session', token, {
+          path: '/',
+          httpOnly: true,
+          secure: isProd,
+          sameSite: 'Lax',
+          maxAge: 60 * 60 * 24 * 30,
+        });
+        c.header('HX-Refresh', 'true');
+        return c.text('Unlocked');
+      }
+    }
+
+    // 伪装策略：暗号错误时不给任何提示，假装普通查询且无结果，完全不暴露暗门机制
+    return c.html(<FileGrid files={[]} session={undefined} />);
+  }
+
   const searchResult = await documentService.search(q, session?.userId, tag, sort);
   return c.html(<FileGrid files={searchResult.files} session={session} />);
 });
 
-// 3. 打开上传模态框 (HTMX 弹出)
-fileRoutes.get('/files/upload-modal', (c) => {
+// 3. 打开上传模态框 (HTMX 弹出，仅限已解锁的个人网盘主人)
+fileRoutes.get('/files/upload-modal', requireAuth, (c) => {
   const session = c.get('session');
   return c.html(<UploadModal isGuest={!session} />);
 });
 
-// 4. 解析并生成即时排版预览 (免二次网络上传，支持多格式文档与 Office)
-fileRoutes.post('/files/preview', async (c) => {
+// 4. 解析并生成即时排版预览 (支持 PPT/PPTX、Office、PDF、代码与通用二进制文件)
+fileRoutes.post('/files/preview', requireAuth, async (c) => {
   const body = await c.req.parseBody();
   const file = body['file'];
   const { documentService } = c.get('services');
 
   if (!file || typeof file === 'string') {
-    return c.html(<div style="color: var(--danger-color); padding: 1rem;">⚠️ 请选择有效的文档文件</div>);
+    return c.html(<div style="color: var(--danger-color); padding: 1rem;">⚠️ 请选择有效的文件</div>);
   }
 
   const fileName = (file as File).name || 'document.md';
@@ -84,7 +122,7 @@ fileRoutes.post('/files/preview', async (c) => {
   try {
     const arrayBuffer = await (file as File).arrayBuffer();
     const content = await DocumentConverter.convertToMarkdown(fileName, arrayBuffer);
-    const preview = await documentService.previewUpload(fileName, content);
+    const preview = await documentService.previewUpload(fileName, content, arrayBuffer);
     return c.html(
       <UploadPreviewCard
         fileName={preview.fileName}
@@ -97,8 +135,8 @@ fileRoutes.post('/files/preview', async (c) => {
   }
 });
 
-// 5. 确认入库到 D1 (触发双轨元数据提取与标签向量收敛)
-fileRoutes.post('/files/confirm', async (c) => {
+// 5. 确认入库到个人网盘 (保存原文件二进制，提取大纲与 AI 标签)
+fileRoutes.post('/files/confirm', requireAuth, async (c) => {
   const session = c.get('session');
   const { documentService } = c.get('services');
   const body = await c.req.parseBody<{ uploadToken?: string }>();
@@ -108,9 +146,9 @@ fileRoutes.post('/files/confirm', async (c) => {
     return c.text('缺少入库令牌', 400);
   }
 
-  const ownerRoleId = session ? session.currentRoleId : 'rol_public';
-  const creatorUserId = session ? session.userId : 'usr_guest';
-  const isPublic = !session; // 游客上传默认公开
+  const ownerRoleId = session?.currentRoleId || 'rol_accountadmin';
+  const creatorUserId = session?.userId || 'usr_master';
+  const isPublic = false; // 个人网盘上传默认私有，可在面板中一键公开
 
   try {
     const docMeta = await documentService.commitDocument(uploadToken, ownerRoleId, creatorUserId, isPublic);
@@ -120,7 +158,7 @@ fileRoutes.post('/files/confirm', async (c) => {
         ? documentService.listAccessible(session.userId)
         : documentService.listPublic(),
       documentService.listPopularTags(20),
-      documentService.getDocumentForView(docMeta.id, session?.userId),
+      documentService.getDocumentForView(docMeta.id, session?.userId, !!session?.isMaster),
     ]);
 
     c.header('HX-Trigger', 'fileUploaded');
@@ -140,17 +178,18 @@ fileRoutes.post('/files/confirm', async (c) => {
   }
 });
 
-// 6. 阅读/查看特定 Markdown 文档 (自增点击量并支持免登公开访问)
+// 6. 阅读/查看特定 Markdown 文档与大纲 (自增点击量并支持免登公开访问)
 fileRoutes.get('/files/:id', async (c) => {
   const fileId = c.req.param('id');
   if (!fileId) return c.text('缺少文件ID', 400);
 
   const session = c.get('session');
   const userId = session?.userId;
+  const isMaster = !!session?.isMaster || session?.roles?.includes('rol_accountadmin');
   const { documentService } = c.get('services');
 
   try {
-    const viewData = await documentService.getDocumentForView(fileId, userId);
+    const viewData = await documentService.getDocumentForView(fileId, userId, isMaster);
 
     if (c.req.header('HX-Request')) {
       return c.html(
@@ -163,7 +202,7 @@ fileRoutes.get('/files/:id', async (c) => {
     }
 
     const [files, popularTags] = await Promise.all([
-      userId ? documentService.listAccessible(userId) : documentService.listPublic(),
+      isMaster ? documentService.listAccessible(userId || 'usr_master') : documentService.listPublic(),
       documentService.listPopularTags(20),
     ]);
 
@@ -186,31 +225,52 @@ fileRoutes.get('/files/:id', async (c) => {
   }
 });
 
-// 7. 下载原始 .md 文件
+// 7. 下载原文件二进制 (支持 PPTX, PDF, Word, Markdown, ZIP 等)
+fileRoutes.get('/files/:id/download', async (c) => {
+  const fileId = c.req.param('id');
+  if (!fileId) return c.text('缺少文件ID', 400);
+
+  const session = c.get('session');
+  const isMaster = !!session?.isMaster || session?.roles?.includes('rol_accountadmin');
+  const { documentService } = c.get('services');
+
+  try {
+    const rawFile = await documentService.getRawFile(fileId, isMaster);
+    c.header('Content-Type', rawFile.mimeType);
+    c.header('Content-Disposition', `attachment; filename="${encodeURIComponent(rawFile.name)}"`);
+    return c.body(rawFile.buffer);
+  } catch (err: any) {
+    return c.text(err.message || '文件不存在或无权下载该文件 (403 Forbidden)', 403);
+  }
+});
+
+// 8. 下载导出的 Markdown 文本
 fileRoutes.get('/files/:id/raw', async (c) => {
   const fileId = c.req.param('id');
   if (!fileId) return c.text('缺少文件ID', 400);
 
   const session = c.get('session');
   const userId = session?.userId;
+  const isMaster = !!session?.isMaster || session?.roles?.includes('rol_accountadmin');
   const { documentService } = c.get('services');
 
   try {
-    const raw = await documentService.getRawContent(fileId, userId);
+    const raw = await documentService.getRawContent(fileId, userId, isMaster);
     c.header('Content-Type', 'text/markdown; charset=utf-8');
-    c.header('Content-Disposition', `attachment; filename="${encodeURIComponent(raw.name)}"`);
+    c.header('Content-Disposition', `attachment; filename="${encodeURIComponent(raw.name.replace(/\.[^.]+$/, '') + '.md')}"`);
     return c.body(raw.content);
   } catch (err: any) {
     return c.text(err.message || '无权下载该文件 (403 Forbidden)', 403);
   }
 });
 
-// 8. 切换公开/私有可见性状态 (公开：游客可读；私有：仅授权用户可读)
+// 9. 切换公开/私有可见性状态 (仅 Master 有权切换)
 const handleTogglePublic = async (c: any) => {
   const fileId = c.req.param('id');
   if (!fileId) return c.text('缺少文件ID', 400);
 
   const session = c.get('session')!;
+  const isMaster = !!session?.isMaster || session?.roles?.includes('rol_accountadmin');
   const { documentService } = c.get('services');
 
   try {
@@ -218,9 +278,9 @@ const handleTogglePublic = async (c: any) => {
     if (!meta) return c.text('文件不存在', 404);
 
     const nextState = !meta.isPublic;
-    await documentService.updatePublicStatus(fileId, nextState, session.userId);
+    await documentService.updatePublicStatus(fileId, nextState, session.userId, isMaster);
 
-    const updatedView = await documentService.getDocumentForView(fileId, session.userId);
+    const updatedView = await documentService.getDocumentForView(fileId, session.userId, isMaster);
     return c.html(
       <FileViewer
         metadata={updatedView.metadata}
@@ -236,16 +296,17 @@ const handleTogglePublic = async (c: any) => {
 fileRoutes.post('/files/:id/toggle-public', requireAuth, handleTogglePublic);
 fileRoutes.post('/files/:id/toggle-share', requireAuth, handleTogglePublic);
 
-// 9. 物理删除文档 (基于 Snowflake RBAC 鉴权，自动级联清理孤儿标签)
+// 10. 物理删除文件 (仅 Master 有权删除)
 fileRoutes.delete('/files/:id', requireAuth, async (c) => {
   const fileId = c.req.param('id');
   if (!fileId) return c.text('缺少文件ID', 400);
 
   const session = c.get('session')!;
+  const isMaster = !!session?.isMaster || session?.roles?.includes('rol_accountadmin');
   const { documentService } = c.get('services');
 
   try {
-    await documentService.deleteDocument(fileId, session.userId);
+    await documentService.deleteDocument(fileId, session.userId, isMaster);
 
     const [files, popularTags] = await Promise.all([
       documentService.listAccessible(session.userId),

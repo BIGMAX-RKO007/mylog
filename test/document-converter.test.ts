@@ -91,10 +91,57 @@ describe('DocumentConverter (Multi-Format Support)', () => {
     }
   });
 
-  it('should reject unsupported binary format', async () => {
+  it('should convert pptx file into structured slide outline', async () => {
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+    // 构造模拟 slide1.xml
+    const slide1Xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+        <p:cSld>
+          <p:spTree>
+            <p:sp><p:txBody><a:p><a:r><a:t>架构设计全景汇报</a:t></a:r></a:p></p:txBody></p:sp>
+            <p:sp><p:txBody><a:p><a:r><a:t>第一副标题：个人网盘与微架构</a:t></a:r></a:p></p:txBody></p:sp>
+          </p:spTree>
+        </p:cSld>
+      </p:sld>`;
+    // 构造模拟 slide2.xml
+    const slide2Xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+        <p:cSld>
+          <p:spTree>
+            <p:sp><p:txBody><a:p><a:r><a:t>技术选型核心优势</a:t></a:r></a:p></p:txBody></p:sp>
+            <p:sp><p:txBody><a:p><a:r><a:t>1. 边缘计算 0 账单</a:t></a:r></a:p><a:p><a:r><a:t>2. HTMX 超媒体极速响应</a:t></a:r></a:p></p:txBody></p:sp>
+          </p:spTree>
+        </p:cSld>
+      </p:sld>`;
+
+    zip.file('ppt/slides/slide1.xml', slide1Xml);
+    zip.file('ppt/slides/slide2.xml', slide2Xml);
+
+    const buffer = await zip.generateAsync({ type: 'arraybuffer' });
+    const md = await DocumentConverter.convertToMarkdown('my-pitch.pptx', buffer);
+
+    expect(md).toContain('# my-pitch');
+    expect(md).toContain('共 2 页幻灯片');
+    expect(md).toContain('## 幻灯片 1: 架构设计全景汇报');
+    expect(md).toContain('第一副标题：个人网盘与微架构');
+    expect(md).toContain('## 幻灯片 2: 技术选型核心优势');
+    expect(md).toContain('1. 边缘计算 0 账单');
+    expect(md).toContain('2. HTMX 超媒体极速响应');
+  });
+
+  it('should generate fallback card for ppt binary', async () => {
+    const buffer = new Uint8Array([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]).buffer;
+    const md = await DocumentConverter.convertToMarkdown('presentation.ppt', buffer);
+    expect(md).toContain('PowerPoint 97-2003 演示文稿');
+    expect(md).toContain('下载原文件');
+  });
+
+  it('should handle general binary files gracefully in cloud drive mode', async () => {
     const buffer = new Uint8Array([0x00, 0x01, 0x02, 0xff, 0xfe]).buffer;
-    await expect(DocumentConverter.convertToMarkdown('bad.unknown_bin', buffer)).rejects.toThrow(
-      '暂不支持解析格式'
-    );
+    const md = await DocumentConverter.convertToMarkdown('archive.zip', buffer);
+    expect(md).toContain('个人网盘压缩包资产');
+    expect(md).toContain('archive.zip');
+    expect(md).toContain('下载原文件');
   });
 });

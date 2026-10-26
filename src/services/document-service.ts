@@ -1,5 +1,6 @@
 import { marked } from 'marked';
 import { RbacService } from './rbac-service';
+import { DocumentConverter } from './document-converter';
 
 export interface DocumentMetadata {
   id: string;
@@ -353,20 +354,32 @@ ${preview}`;
   // 文档上传暂存与提交入库
   // -------------------------------------------------------------
 
-  async previewUpload(fileName: string, rawMarkdown: string): Promise<PreviewResult> {
+  async previewUpload(fileName: string, rawMarkdown: string, rawBuffer?: ArrayBuffer): Promise<PreviewResult> {
     if (!rawMarkdown || !rawMarkdown.trim()) {
-      throw new Error('上传的 Markdown 文件内容为空');
+      throw new Error('上传的文件内容为空');
     }
 
     const parsed = DocumentService.parseMarkdown(rawMarkdown, fileName);
     const sha256 = await DocumentService.computeSha256(rawMarkdown);
 
+    // 将 rawBuffer 编码为 base64 暂存 (若未提供则使用 rawMarkdown)
+    let rawBase64 = '';
+    if (rawBuffer && rawBuffer.byteLength > 0) {
+      const bytes = new Uint8Array(rawBuffer);
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      rawBase64 = btoa(binary);
+    }
+
     const payload = {
       name: fileName,
       title: parsed.title,
       rawMarkdown,
+      rawBase64,
       sha256,
-      size: parsed.size,
+      size: rawBuffer ? rawBuffer.byteLength : parsed.size,
       exp: Date.now() + 1000 * 60 * 15, // 15 分钟有效
     };
 
@@ -383,6 +396,7 @@ ${preview}`;
     name: string;
     title: string;
     rawMarkdown: string;
+    rawBase64?: string;
     sha256: string;
     size: number;
   } {
@@ -400,11 +414,11 @@ ${preview}`;
 
   async commitDocument(
     uploadToken: string,
-    ownerRoleId: string,
-    creatorUserId: string,
+    ownerRoleId: string = 'rol_accountadmin',
+    creatorUserId: string = 'usr_master',
     isPublic: boolean = false
   ): Promise<DocumentMetadata> {
-    const { name, title: initialTitle, rawMarkdown, sha256, size } = DocumentService.unpackUploadToken(uploadToken);
+    const { name, title: initialTitle, rawMarkdown, rawBase64, sha256, size } = DocumentService.unpackUploadToken(uploadToken);
     const fileId = `file_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
     const r2Key = `files/${ownerRoleId}/${fileId}.md`;
     const now = Date.now();
@@ -423,23 +437,40 @@ ${preview}`;
       }
     }
 
-    // 3. 存储正文至 file_contents (免信用卡 D1 存储适配器)
+    // 3. 将原文件二进制还原 (如有)
+    let rawData: Uint8Array | null = null;
+    if (rawBase64) {
+      try {
+        const binary = atob(rawBase64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        rawData = bytes;
+      } catch (e) {
+        console.warn('Failed to decode rawBase64:', e);
+      }
+    } else {
+      rawData = new TextEncoder().encode(rawMarkdown);
+    }
+
+    // 4. 存储正文与原始二进制至 file_contents (免信用卡 D1 存储适配器)
     await this.db
       .prepare(`
-        INSERT INTO file_contents (key, content, updated_at)
-        VALUES (?, ?, ?)
-        ON CONFLICT(key) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at
+        INSERT INTO file_contents (key, content, raw_data, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(key) DO UPDATE SET content = excluded.content, raw_data = coalesce(excluded.raw_data, file_contents.raw_data), updated_at = excluded.updated_at
       `)
-      .bind(r2Key, rawMarkdown, now)
+      .bind(r2Key, rawMarkdown, rawData ? rawData.buffer : null, now)
       .run();
 
-    // 4. 创建 securable_objects 记录
+    // 5. 创建 securable_objects 记录
     await this.db
       .prepare('INSERT INTO securable_objects (id, object_type, owner_role_id, created_at) VALUES (?, ?, ?, ?)')
       .bind(fileId, 'FILE', ownerRoleId, now)
       .run();
 
-    // 5. 创建 files 元数据记录
+    // 6. 创建 files 元数据记录
     await this.db
       .prepare(`
         INSERT INTO files (id, name, title, size, r2_key, sha256, is_public, category_id, views, ai_summary, created_at, updated_at)
@@ -448,14 +479,14 @@ ${preview}`;
       .bind(fileId, name, finalTitle, size, r2Key, sha256, isPublic ? 1 : 0, extracted.summary || null, now, now)
       .run();
 
-    // 6. 为所有者角色赋予 OWNERSHIP 特权
+    // 7. 为所有者角色赋予 OWNERSHIP 特权
     const grantId = `grt_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
     await this.db
       .prepare('INSERT INTO grants (id, role_id, object_id, privilege, granted_by, granted_at) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(grantId, ownerRoleId, fileId, 'OWNERSHIP', creatorUserId, now)
       .run();
 
-    // 7. 绑定标签 (更新 tags 字典与 file_tags 关联)
+    // 8. 绑定标签 (更新 tags 字典与 file_tags 关联)
     for (const tagName of normalizedTags) {
       let tag = await this.db.prepare('SELECT id FROM tags WHERE name = ?').bind(tagName).first<{ id: string }>();
       let tagId: string;
@@ -490,16 +521,18 @@ ${preview}`;
   // 文档阅读与内容拉取
   // -------------------------------------------------------------
 
-  async getDocumentForView(fileId: string, userId?: string): Promise<DocumentViewData> {
+  async getDocumentForView(fileId: string, userId?: string, isMaster: boolean = false): Promise<DocumentViewData> {
     const meta = await this.findById(fileId);
     if (!meta) {
       throw new Error('文档不存在或已被删除');
     }
 
-    // 鉴权
-    if (this.rbacService) {
-      const canRead = await this.rbacService.hasPrivilege(userId, fileId, 'READ');
-      if (!canRead) {
+    // 鉴权：非公开文件且非 Master
+    if (!meta.isPublic && !isMaster && userId !== 'usr_master') {
+      if (this.rbacService && userId) {
+        const canRead = await this.rbacService.hasPrivilege(userId, fileId, 'READ');
+        if (!canRead) throw new Error('您没有权限查看该文档 (403 Forbidden)');
+      } else {
         throw new Error('您没有权限查看该文档 (403 Forbidden)');
       }
     }
@@ -515,7 +548,7 @@ ${preview}`;
     }
 
     const parsed = DocumentService.parseMarkdown(contentRow.content, meta.name);
-    const isOwner = this.rbacService && userId ? await this.rbacService.hasPrivilege(userId, fileId, 'DELETE') : false;
+    const isOwner = isMaster || userId === 'usr_master' || (this.rbacService && userId ? await this.rbacService.hasPrivilege(userId, fileId, 'DELETE') : false);
 
     return {
       metadata: meta,
@@ -524,13 +557,76 @@ ${preview}`;
     };
   }
 
-  async getRawContent(fileId: string, userId?: string): Promise<{ name: string; content: string }> {
+  /**
+   * 下载原始二进制文件 (支持 PPTX, PDF, Word, Markdown, ZIP 等)
+   */
+  async getRawFile(fileId: string, isMaster: boolean = false): Promise<{ name: string; buffer: ArrayBuffer; mimeType: string }> {
+    const meta = await this.findById(fileId);
+    if (!meta) throw new Error('文件不存在 (404 Not Found)');
+
+    // 权限校验：私有文件必须由 Master 下载
+    if (!meta.isPublic && !isMaster) {
+      throw new Error('无权下载该私有文件 (403 Forbidden)');
+    }
+
+    const row = await this.db
+      .prepare('SELECT content, raw_data FROM file_contents WHERE key = ?')
+      .bind(meta.r2Key)
+      .first<{ content: string; raw_data: any }>();
+
+    if (!row) throw new Error('文件内容缺失');
+
+    let buffer: ArrayBuffer;
+    if (row.raw_data && row.raw_data.byteLength > 0) {
+      buffer = row.raw_data;
+    } else {
+      buffer = new TextEncoder().encode(row.content || '').buffer as ArrayBuffer;
+    }
+
+    const ext = DocumentConverter.getExtension(meta.name);
+    const mimeMap: Record<string, string> = {
+      md: 'text/markdown; charset=utf-8',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      ppt: 'application/vnd.ms-powerpoint',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      doc: 'application/msword',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      xls: 'application/vnd.ms-excel',
+      pdf: 'application/pdf',
+      zip: 'application/zip',
+      rar: 'application/x-rar-compressed',
+      '7z': 'application/x-7z-compressed',
+      tar: 'application/x-tar',
+      gz: 'application/gzip',
+      json: 'application/json',
+      txt: 'text/plain; charset=utf-8',
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      gif: 'image/gif',
+      svg: 'image/svg+xml',
+    };
+
+    const mimeType = mimeMap[ext] || 'application/octet-stream';
+
+    return {
+      name: meta.name,
+      buffer,
+      mimeType,
+    };
+  }
+
+  async getRawContent(fileId: string, userId?: string, isMaster: boolean = false): Promise<{ name: string; content: string }> {
     const meta = await this.findById(fileId);
     if (!meta) throw new Error('文件不存在');
 
-    if (this.rbacService) {
-      const canRead = await this.rbacService.hasPrivilege(userId, fileId, 'READ');
-      if (!canRead) throw new Error('无权下载该文件 (403 Forbidden)');
+    if (!meta.isPublic && !isMaster && userId !== 'usr_master') {
+      if (this.rbacService && userId) {
+        const canRead = await this.rbacService.hasPrivilege(userId, fileId, 'READ');
+        if (!canRead) throw new Error('无权下载该文件 (403 Forbidden)');
+      } else {
+        throw new Error('无权下载该文件 (403 Forbidden)');
+      }
     }
 
     const row = await this.db.prepare('SELECT content FROM file_contents WHERE key = ?').bind(meta.r2Key).first<{ content: string }>();
@@ -546,11 +642,15 @@ ${preview}`;
   // 文档删除与孤儿标签级联清理
   // -------------------------------------------------------------
 
-  async deleteDocument(fileId: string, userId: string): Promise<void> {
-    if (this.rbacService) {
-      const canDelete = await this.rbacService.hasPrivilege(userId, fileId, 'DELETE');
-      if (!canDelete) {
-        throw new Error('无权删除该文档：仅文档所有者或管理员可执行删除操作');
+  async deleteDocument(fileId: string, userId?: string, isMaster: boolean = false): Promise<void> {
+    if (!isMaster && userId !== 'usr_master') {
+      if (this.rbacService && userId) {
+        const canDelete = await this.rbacService.hasPrivilege(userId, fileId, 'DELETE');
+        if (!canDelete) {
+          throw new Error('无权删除该文档：仅网盘主人可执行删除操作');
+        }
+      } else {
+        throw new Error('无权删除该文档：仅网盘主人可执行删除操作');
       }
     }
 
@@ -572,10 +672,14 @@ ${preview}`;
     await this.db.prepare('UPDATE tags SET usage_count = (SELECT COUNT(*) FROM file_tags WHERE file_tags.tag_id = tags.id)').run();
   }
 
-  async updatePublicStatus(fileId: string, isPublic: boolean, userId: string): Promise<void> {
-    if (this.rbacService) {
-      const isOwner = await this.rbacService.hasPrivilege(userId, fileId, 'OWNERSHIP');
-      if (!isOwner) throw new Error('只有所有者有权调整分享权限');
+  async updatePublicStatus(fileId: string, isPublic: boolean, userId?: string, isMaster: boolean = false): Promise<void> {
+    if (!isMaster && userId !== 'usr_master') {
+      if (this.rbacService && userId) {
+        const isOwner = await this.rbacService.hasPrivilege(userId, fileId, 'OWNERSHIP');
+        if (!isOwner) throw new Error('只有所有者有权调整分享权限');
+      } else {
+        throw new Error('只有所有者有权调整分享权限');
+      }
     }
 
     await this.db
@@ -652,29 +756,44 @@ ${preview}`;
   }
 
   async listAccessible(userId: string, search?: string, tag?: string, sort?: 'latest' | 'views'): Promise<DocumentMetadata[]> {
-    let query = `
-      WITH RECURSIVE user_effective_roles AS (
-        SELECT role_id FROM user_roles WHERE user_id = ?
-        UNION
-        SELECT ri.child_role_id
-        FROM role_inheritance ri
-        JOIN user_effective_roles uer ON ri.parent_role_id = uer.role_id
-      )
-      SELECT DISTINCT f.id, f.name, f.title, f.size, f.r2_key, f.sha256, f.is_public,
-             f.views, f.ai_summary, so.owner_role_id, f.created_at, f.updated_at,
-             (SELECT GROUP_CONCAT(t.name) FROM file_tags ft JOIN tags t ON ft.tag_id = t.id WHERE ft.file_id = f.id) as tag_names
-      FROM files f
-      JOIN securable_objects so ON f.id = so.id
-      LEFT JOIN grants g ON g.object_id = f.id
-      WHERE (
-        (g.role_id IN (SELECT role_id FROM user_effective_roles) AND g.privilege IN ('READ', 'OWNERSHIP'))
-        OR f.is_public = 1
-        OR 'rol_accountadmin' IN (SELECT role_id FROM user_effective_roles)
-        OR 'rol_admin' IN (SELECT role_id FROM user_effective_roles)
-      )
-    `;
+    const isMaster = userId === 'usr_master';
+    let query: string;
+    const params: unknown[] = [];
 
-    const params: unknown[] = [userId];
+    if (isMaster) {
+      // 个人网盘 Master 专属全量查询极速通道 (零 CTE 开销)
+      query = `
+        SELECT DISTINCT f.id, f.name, f.title, f.size, f.r2_key, f.sha256, f.is_public,
+               f.views, f.ai_summary, so.owner_role_id, f.created_at, f.updated_at,
+               (SELECT GROUP_CONCAT(t.name) FROM file_tags ft JOIN tags t ON ft.tag_id = t.id WHERE ft.file_id = f.id) as tag_names
+        FROM files f
+        JOIN securable_objects so ON f.id = so.id
+        WHERE 1=1
+      `;
+    } else {
+      query = `
+        WITH RECURSIVE user_effective_roles AS (
+          SELECT role_id FROM user_roles WHERE user_id = ?
+          UNION
+          SELECT ri.child_role_id
+          FROM role_inheritance ri
+          JOIN user_effective_roles uer ON ri.parent_role_id = uer.role_id
+        )
+        SELECT DISTINCT f.id, f.name, f.title, f.size, f.r2_key, f.sha256, f.is_public,
+               f.views, f.ai_summary, so.owner_role_id, f.created_at, f.updated_at,
+               (SELECT GROUP_CONCAT(t.name) FROM file_tags ft JOIN tags t ON ft.tag_id = t.id WHERE ft.file_id = f.id) as tag_names
+        FROM files f
+        JOIN securable_objects so ON f.id = so.id
+        LEFT JOIN grants g ON g.object_id = f.id
+        WHERE (
+          (g.role_id IN (SELECT role_id FROM user_effective_roles) AND g.privilege IN ('READ', 'OWNERSHIP'))
+          OR f.is_public = 1
+          OR 'rol_accountadmin' IN (SELECT role_id FROM user_effective_roles)
+          OR 'rol_admin' IN (SELECT role_id FROM user_effective_roles)
+        )
+      `;
+      params.push(userId);
+    }
 
     if (search && search.trim()) {
       query += ` AND (f.title LIKE ? OR f.name LIKE ? OR f.ai_summary LIKE ?)`;

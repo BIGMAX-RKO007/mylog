@@ -74,17 +74,90 @@ export function getSsoAuthorizeUrl(
 }
 
 /**
- * 全局 SSO 票据拦截与会话自动打通中间件
- * 1. 拦截 URL 携带的 ?ticket=xxx 参数，自动置换为本地会话
- * 2. 检查本地 mylog_session，若无则探查上游 myauth_session
+ * 构造 Master 专属签名 Token
+ */
+export async function createMasterSessionToken(masterKey: string): Promise<string> {
+  const payload = {
+    sub: 'usr_master',
+    name: 'Master',
+    role: 'rol_accountadmin',
+    iat: Date.now(),
+    exp: Date.now() + 1000 * 60 * 60 * 24 * 30, // 30天
+  };
+  const payloadStr = JSON.stringify(payload);
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(masterKey),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, enc.encode(payloadStr));
+  const sigHex = Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+  return `${btoa(encodeURIComponent(payloadStr))}.${sigHex}`;
+}
+
+/**
+ * 校验 Master 专属签名 Token
+ */
+export async function verifyMasterSessionToken(token: string, masterKey: string): Promise<boolean> {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 2) return false;
+    const [payloadB64, sigHex] = parts;
+    const payloadStr = decodeURIComponent(atob(payloadB64));
+    const payload = JSON.parse(payloadStr);
+    if (Date.now() > payload.exp) return false;
+
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      enc.encode(masterKey),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify']
+    );
+    const match = sigHex.match(/.{1,2}/g);
+    if (!match) return false;
+    const sigBytes = new Uint8Array(match.map((byte) => parseInt(byte, 16)));
+    return await crypto.subtle.verify('HMAC', key, sigBytes, enc.encode(payloadStr));
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 全局会话拦截中间件 (优先验证个人网盘 Master 密钥会话，降级兼容原有 SSO)
  */
 export async function ssoSessionMiddleware(c: Context<AppContext>, next: Next) {
+  const masterKey = c.env.MASTER_KEY || 'mylog-master-key';
+
+  // 1. 优先校验个人网盘 Master 专属会话
+  const masterToken = getCookie(c, 'mylog_master_session');
+  if (masterToken) {
+    const isValidMaster = await verifyMasterSessionToken(masterToken, masterKey);
+    if (isValidMaster) {
+      c.set('session', {
+        userId: 'usr_master',
+        username: 'Master',
+        currentRoleId: 'rol_accountadmin',
+        roles: ['rol_accountadmin', 'rol_admin'],
+        isMaster: true,
+      });
+      await next();
+      return;
+    }
+  }
+
   const authHubUrl = c.env.AUTH_HUB_URL || 'https://bigmax.dpdns.org';
   const appId = c.env.MYAUTH_APP_ID || 'app_mylog';
   const clientSecret = c.env.MYAUTH_CLIENT_SECRET || 'sec_ee78fe3728e742a4a40d825f';
   const { authService } = c.get('services');
 
-  // 1. 处理 SSO 回调携带的 ticket
+  // 2. 处理 SSO 回调携带的 ticket (保留兼容)
   const ticket = c.req.query('ticket');
   if (ticket) {
     const exchange = await exchangeSsoTicket(authHubUrl, appId, clientSecret, ticket);
@@ -102,7 +175,6 @@ export async function ssoSessionMiddleware(c: Context<AppContext>, next: Next) {
 
       c.set('session', session);
 
-      // 移除 URL 上的 ticket 与 state 参数，跳转回纯净的目标 URL
       const cleanUrl = new URL(c.req.url);
       cleanUrl.searchParams.delete('ticket');
       cleanUrl.searchParams.delete('state');
@@ -112,7 +184,7 @@ export async function ssoSessionMiddleware(c: Context<AppContext>, next: Next) {
     }
   }
 
-  // 2. 验证本地已有会话
+  // 3. 验证本地原有普通会话
   const localToken = getCookie(c, 'mylog_session');
   if (localToken) {
     const session = await authService.validateSession(localToken);
@@ -123,7 +195,7 @@ export async function ssoSessionMiddleware(c: Context<AppContext>, next: Next) {
     }
   }
 
-  // 3. 本地无有效会话时，检查是否有同根域 myauth_session Cookie
+  // 4. 探查上游 myauth 会话
   const hubToken = getCookie(c, 'myauth_session');
   if (hubToken) {
     const verifyRes = await verifyMyauthSession(authHubUrl, hubToken);

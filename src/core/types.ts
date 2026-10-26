@@ -6,6 +6,7 @@ export interface Bindings {
   DB: D1Database;
   STORAGE?: R2Bucket;
   AUTH_SECRET?: string;
+  MASTER_KEY?: string; // 个人专属 Master Key
   AI?: any;
   TAG_VECTORS?: any;
   AUTH_HUB_URL?: string;
@@ -18,6 +19,7 @@ export interface UserSession {
   username: string;
   currentRoleId: string;
   roles: string[];
+  isMaster?: boolean; // 是否为个人网盘 Master
 }
 
 export interface AppServices {

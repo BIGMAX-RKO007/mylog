@@ -16,6 +16,7 @@
   "dependencies": {
     "hono": "^4.6.0",
     "htmx.org": "^2.0.3",
+    "jszip": "^3.10.2",
     "mammoth": "^1.13.0",
     "marked": "^14.1.0",
     "unpdf": "^1.9.1",

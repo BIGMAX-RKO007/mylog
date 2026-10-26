@@ -71,13 +71,16 @@ export const DriveView: FC<DrivePageProps> = ({
             <div class="header-right">
               {session ? (
                 <div class="user-top-profile">
-                  <div class="avatar-ring">{session.username.slice(0, 1).toUpperCase()}</div>
-                  <span class="avatar-name">{session.username}</span>
-                  <a href="/logout" class="quick-logout-btn" title="退出登录">退出</a>
+                  <span class="master-status-pill" title="已解锁个人私有网盘">⚡ Master</span>
+                  <a href="/logout" class="quick-logout-btn" title="锁定并退出 (返回伪装状态)">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                    <span>锁定</span>
+                  </a>
                 </div>
-              ) : (
-                <a href="/login" class="nav-login-pill">登录 / 注册</a>
-              )}
+              ) : null}
             </div>
           </div>
         </header>
@@ -100,9 +103,14 @@ export const DriveView: FC<DrivePageProps> = ({
       {/* 1. 悬浮毛玻璃顶部导航条 (Floating Frosted Top Navbar) */}
       <header class="bento-header">
         <div class="header-inner">
-          {/* 左侧：Logo 标识与品牌 */}
+          {/* 左侧：Logo 标识与品牌 (双击可激活 Master 极客暗门) */}
           <div class="header-left">
-            <a href="/" class="brand-link">
+            <a
+              href="/"
+              class="brand-link"
+              title="mylog — 双击唤出 Master 密钥暗门"
+              ondblclick="event.preventDefault(); window.toggleMasterUnlockModal && window.toggleMasterUnlockModal(true);"
+            >
               <svg class="brand-flame-svg" viewBox="0 0 24 24" width="28" height="28" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <defs>
                   <linearGradient id="flameGradBento" x1="0%" y1="100%" x2="100%" y2="0%">
@@ -132,7 +140,7 @@ export const DriveView: FC<DrivePageProps> = ({
             </a>
           </div>
 
-          {/* 中部：醒目大气的毛玻璃居中全宽搜索框 (Frosted Glass Search Bar) */}
+          {/* 中部：醒目大气的毛玻璃居中全宽搜索框 (兼极客暗门激活入口) */}
           <div class="header-center">
             <div class="bento-search-box">
               <svg class="search-lens-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
@@ -144,20 +152,20 @@ export const DriveView: FC<DrivePageProps> = ({
                 type="search"
                 name="q"
                 class="bento-search-input"
-                placeholder="搜索文档标题、内容或标签..."
+                placeholder={session ? "搜索网盘文件、标题、标签，或输入 :lock 锁定..." : "搜索公开技术笔记与文档..."}
                 value={searchQuery}
                 hx-get="/files"
-                hx-trigger="keyup changed delay:250ms, search"
+                hx-trigger="keyup changed delay:250ms, search, keydown[key=='Enter']"
                 hx-target="#file-grid-container"
                 hx-include="#current-sort-id, #current-tag-id"
                 hx-swap="innerHTML"
               />
 
-              <span class="search-kbd-pill">⌘K</span>
+              <span class="search-kbd-pill" title="按回车即刻检索">Enter</span>
             </div>
           </div>
 
-          {/* 右上角：明确放置用户登录/头像入口 (Explicit Top-Right User Menu) */}
+          {/* 右上角：纯粹伪装模式 (未登录时不放任何登录/注册入口，仅暗门解锁后才显示 Master 状态) */}
           <div class="header-right">
             {/* 明暗主题切换 */}
             <button
@@ -175,33 +183,33 @@ export const DriveView: FC<DrivePageProps> = ({
               </svg>
             </button>
 
+            {/* 未登录时的隐蔽暗门微按钮 (快捷键: Ctrl+Shift+L) */}
+            {!session && (
+              <button
+                type="button"
+                class="stealth-gate-btn"
+                onclick="window.toggleMasterUnlockModal && window.toggleMasterUnlockModal(true)"
+                title="Master 专属暗门 (快捷键: Ctrl+Shift+L)"
+              >
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </button>
+            )}
+
             {session ? (
               <div class="user-top-profile">
-                {session.roles?.includes('rol_accountadmin') && (
-                  <a href="/admin/rbac" class="admin-badge-pill" title="访问 Snowflake RBAC 权限管理中心">
-                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                    </svg>
-                    <span>权限中心</span>
-                  </a>
-                )}
-                <div class="avatar-ring" title={`当前登录: ${session.username}`}>
-                  {session.username.slice(0, 1).toUpperCase()}
-                </div>
-                <a href="/logout" class="quick-logout-btn" title="安全退出">
-                  <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/>
+                <span class="master-status-pill" title="已解锁个人私有网盘">⚡ Master</span>
+                <a href="/logout" class="quick-logout-btn" title="锁定并退出 (返回只读伪装)">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                   </svg>
+                  <span>锁定</span>
                 </a>
               </div>
-            ) : (
-              <a href="/login" class="nav-login-pill">
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M15 12H3"/>
-                </svg>
-                <span>登录 / 注册</span>
-              </a>
-            )}
+            ) : null}
           </div>
         </div>
       </header>
@@ -336,21 +344,185 @@ export const DriveView: FC<DrivePageProps> = ({
         </section>
       </main>
 
-      {/* 4. 右下角呼吸高能光晕悬浮按钮 (Floating Action Button - FAB，未登录时常态透明暗门) */}
-      <button
-        class={`fab-upload ${!session ? 'fab-stealth' : ''}`}
-        title={session ? '上传文档 (支持 MD / Word / 表格 / 代码)' : ''}
-        hx-get="/files/upload-modal"
-        hx-target="#modal-container"
-        hx-swap="innerHTML"
-      >
-        <span class="fab-glow-aura"></span>
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-        <span class="fab-label">上传文档</span>
-      </button>
+      {/* 4. 伪装极简页脚 */}
+      <footer class="bento-footer">
+        <p>
+          <span>© {new Date().getFullYear()} mylog · 边缘云存储与 Bento 知识网盘</span>
+          {!session && (
+            <button
+              type="button"
+              class="footer-stealth-dot"
+              onclick="window.toggleMasterUnlockModal && window.toggleMasterUnlockModal(true)"
+              title="Master 密钥解锁"
+            >
+              ·
+            </button>
+          )}
+        </p>
+      </footer>
+
+      {/* 5. 隐蔽 Master 密钥解锁模态框 */}
+      {!session && (
+        <div
+          id="master-unlock-modal"
+          class="stealth-modal-backdrop"
+          style="display: none;"
+          onclick="if(event.target === this) window.toggleMasterUnlockModal(false);"
+        >
+          <div class="stealth-modal-sheet">
+            <div class="stealth-sheet-header">
+              <div class="stealth-lock-badge">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div class="stealth-sheet-titles">
+                <h3 class="stealth-sheet-title">🔐 Master 密钥解锁</h3>
+                <p class="stealth-sheet-desc">输入专属密钥即可进入个人私有网盘模式，开启自由上传与下载</p>
+              </div>
+              <button
+                type="button"
+                class="stealth-close-btn"
+                onclick="window.toggleMasterUnlockModal(false)"
+                title="关闭"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form
+              id="stealth-unlock-form"
+              method="post"
+              action="/api/unlock"
+              hx-post="/api/unlock"
+              hx-target="#unlock-feedback"
+              hx-swap="innerHTML"
+              class="stealth-sheet-form"
+            >
+              <div class="stealth-input-group">
+                <input
+                  id="master-key-input"
+                  name="key"
+                  type="password"
+                  class="stealth-password-input"
+                  placeholder="请输入 MASTER_KEY 密钥..."
+                  required
+                  autocomplete="current-password"
+                />
+                <button
+                  type="button"
+                  class="stealth-eye-btn"
+                  onclick="
+                    const inp = document.getElementById('master-key-input');
+                    inp.type = inp.type === 'password' ? 'text' : 'password';
+                  "
+                  title="查看密钥明文"
+                >
+                  <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div id="unlock-feedback"></div>
+
+              <div class="stealth-sheet-actions">
+                <button
+                  type="button"
+                  class="stealth-btn-cancel"
+                  onclick="window.toggleMasterUnlockModal(false)"
+                >
+                  取消
+                </button>
+                <button type="submit" class="stealth-btn-submit">
+                  <span>解锁进入网盘</span>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                    <polyline points="12 5 19 12 12 19"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div class="stealth-sheet-tip">
+                <span>💡 快捷提示：双击左上角 Logo 或按 <code>Ctrl+Shift+L</code> 亦可呼出</span>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 6. 仅在 Master 解锁网盘时显示上传悬浮按钮 (未登录时完全不渲染，实现绝对伪装) */}
+      {session && (
+        <button
+          class="fab-upload"
+          title="上传文件至个人网盘 (支持 PPT/PPTX、Office、PDF、代码及各类二进制文件)"
+          hx-get="/files/upload-modal"
+          hx-target="#modal-container"
+          hx-swap="innerHTML"
+        >
+          <span class="fab-glow-aura"></span>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          <span class="fab-label">上传至网盘</span>
+        </button>
+      )}
+
+      {/* 7. 暗门激活与全局快捷键脚本 */}
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          window.toggleMasterUnlockModal = function(show) {
+            const modal = document.getElementById('master-unlock-modal');
+            if (!modal) return;
+            const curOpen = modal.style.display !== 'none';
+            const targetOpen = typeof show === 'boolean' ? show : !curOpen;
+            modal.style.display = targetOpen ? 'flex' : 'none';
+            if (targetOpen) {
+              setTimeout(() => {
+                const inp = document.getElementById('master-key-input');
+                if (inp) inp.focus();
+              }, 60);
+            }
+          };
+
+          // 全局快捷键 Ctrl+Shift+L 呼出暗门
+          document.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'l' || e.key === 'L')) {
+              e.preventDefault();
+              window.toggleMasterUnlockModal();
+            }
+            if (e.key === 'Escape') {
+              window.toggleMasterUnlockModal(false);
+            }
+          });
+
+          // 搜索框输入暗门指令按回车激活
+          const searchInp = document.getElementById('file-search-input');
+          if (searchInp) {
+            searchInp.addEventListener('keydown', function(e) {
+              if (e.key === 'Enter') {
+                const val = (searchInp.value || '').trim();
+                if (['login', 'unlock', 'master', ':key', 'mylog-master-key'].includes(val) || val.startsWith(':key ')) {
+                  e.preventDefault();
+                  window.toggleMasterUnlockModal(true);
+                  if (val === 'mylog-master-key') {
+                    const kInp = document.getElementById('master-key-input');
+                    if (kInp) kInp.value = val;
+                  }
+                }
+              }
+            });
+          }
+
+          // 若 URL 包含 unlock 或 login 参数，自动激活暗门
+          if (window.location.search.includes('unlock') || window.location.search.includes('login')) {
+            window.toggleMasterUnlockModal(true);
+          }
+        `
+      }} />
     </div>
   );
 };

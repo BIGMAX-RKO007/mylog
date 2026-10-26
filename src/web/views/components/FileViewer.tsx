@@ -108,7 +108,7 @@ verified: true
           <button
             id="share-link-btn"
             class="btn btn-sm"
-            title={metadata.isPublic ? "复制公开文档链接，任何人均可打开查阅" : "复制文档链接，已登录并拥有权限的用户可打开查阅"}
+            title={metadata.isPublic ? "复制公开文档链接" : "复制私有访问链接"}
             onclick={`
               const url = window.location.origin + '/files/${metadata.id}';
               if (navigator.share) {
@@ -132,34 +132,49 @@ verified: true
             <span>🔗 分享链接</span>
           </button>
 
-          {/* 2. 下载保存原始 MD */}
-          <a href={`/files/${metadata.id}/raw`} target="_blank" class="btn btn-sm" title="下载保存原始 Markdown 文件">
-            💾 保存文件
+          {/* 2. 下载原始文件 (支持 PPTX, PDF, Word, Markdown, ZIP 等) */}
+          <a
+            href={`/files/${metadata.id}/download`}
+            class="btn btn-sm btn-primary-action"
+            title={`下载原始文件 (${metadata.name})`}
+            download={metadata.name}
+          >
+            📥 下载原文件
           </a>
 
-          {/* 拥有者特有控制权 (Snowflake OWNERSHIP 特权) */}
+          {/* 3. 导出 Markdown 大纲 */}
+          <a
+            href={`/files/${metadata.id}/raw`}
+            target="_blank"
+            class="btn btn-sm"
+            title="查看或下载 Markdown 格式大纲"
+          >
+            📄 导出 Markdown
+          </a>
+
+          {/* 网盘主人专属特权 */}
           {isOwner && (
             <>
-              {/* 3. 切换公开/私有可见性 (公开：游客可读；私有：仅授权用户可读) */}
+              {/* 4. 切换公开/私有可见性 */}
               <button
                 class="btn btn-sm"
                 hx-post={`/files/${metadata.id}/toggle-public`}
                 hx-target="#file-viewer-content"
                 hx-swap="outerHTML"
-                title={metadata.isPublic ? "当前为公开状态，点击将设为私有（仅自己和授权角色可见）" : "当前为私有状态，点击将设为公开（未登录游客也可直接阅读）"}
+                title={metadata.isPublic ? "设为私有 (仅自己可见)" : "设为公开 (访客可见)"}
               >
                 {metadata.isPublic ? '🔒 设为私有' : '🌐 设为公开'}
               </button>
 
-              {/* 4. 删除文档 */}
+              {/* 5. 删除文档 */}
               <button
                 class="btn btn-sm btn-danger"
                 hx-delete={`/files/${metadata.id}`}
-                hx-confirm={`确定要彻底从知识库中删除文档「${metadata.title || metadata.name}」吗？删除后将不可恢复。`}
+                hx-confirm={`确定要从个人网盘中删除「${metadata.title || metadata.name}」吗？`}
                 hx-target="#drive-main-container"
                 hx-swap="outerHTML"
               >
-                🗑️ 删除文档
+                🗑️ 删除文件
               </button>
             </>
           )}

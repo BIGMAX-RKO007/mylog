@@ -10,16 +10,11 @@ export const UploadModal: FC<UploadModalProps> = ({ isGuest }) => {
     <div id="upload-modal" class="modal-overlay" onclick="if(event.target === this) this.remove()">
       <div class="modal-content">
         <div class="modal-header">
-          <h3 style="font-size: 1.1rem; font-weight: 600;">📤 上传知识库文档</h3>
+          <h3 style="font-size: 1.1rem; font-weight: 600;">📤 上传文件至私有个人网盘</h3>
           <button class="btn btn-sm" onclick="document.getElementById('upload-modal').remove()">✕</button>
         </div>
 
         <div id="upload-modal-body" class="modal-body">
-          {isGuest && (
-            <div style="font-size: 0.8rem; padding: 0.5rem 0.75rem; background: rgba(59, 130, 246, 0.1); color: var(--accent-color); border-radius: var(--radius-sm); margin-bottom: 1rem; border: 1px solid rgba(59, 130, 246, 0.2);">
-              ℹ️ <strong>游客免登上传</strong>：文件入库后将公开在知识库中供访客阅读；登录后可拥有专属私密文件与完整管理特权。
-            </div>
-          )}
           {/* 上传表单 */}
           <form
             id="preview-upload-form"
@@ -47,24 +42,24 @@ export const UploadModal: FC<UploadModalProps> = ({ isGuest }) => {
                 }
               "
             >
-              <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📄</div>
+              <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">📂</div>
               <p style="font-weight: 600; font-size: 1rem; margin-bottom: 0.25rem;">
-                点击选择 或 拖拽文档文件至此
+                点击选择 或 拖拽文件至此
               </p>
               <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.4;">
-                支持 <strong>Markdown (.md)</strong>、<strong>Office (Word .docx / Excel .xlsx)</strong>、<strong>PDF (.pdf)</strong>、<strong>表格 (.csv)</strong> 与各类 <strong>代码源码与文本</strong>
+                支持 <strong>PowerPoint (.pptx / .ppt)</strong>、<strong>Word (.docx)</strong>、<strong>PDF (.pdf)</strong>、<strong>Markdown (.md)</strong>、<strong>Excel / CSV</strong>、<strong>代码与压缩包 (.zip)</strong> 及各类网盘资产
               </p>
               <input
                 id="file-input"
                 type="file"
                 name="file"
-                accept=".md,.markdown,.docx,.xlsx,.pdf,.txt,.log,.json,.csv,.yaml,.yml,.py,.ts,.tsx,.js,.jsx,.sql,.sh,.ps1,.html,.css,.xml,.java,.go,.rs"
+                accept=".pptx,.ppt,.docx,.xlsx,.pdf,.md,.markdown,.txt,.log,.json,.csv,.yaml,.yml,.zip,.rar,.7z,.py,.ts,.tsx,.js,.jsx,.sql,.sh,.ps1,.html,.css"
                 style="display: none;"
                 onchange="htmx.trigger('#preview-upload-form', 'submit')"
               />
             </div>
             <div id="upload-spinner" class="htmx-indicator" style="text-align: center; margin-top: 1rem; color: var(--text-secondary);">
-              ⏳ 正在解析文档结构并生成排版预览...
+              ⏳ 正在解析文件并提炼核心大纲与 AI 标签...
             </div>
           </form>
         </div>

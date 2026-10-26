@@ -6,8 +6,9 @@ compatibility_flags = ["nodejs_compat"]
 # 启用 workers.dev 默认边缘子域
 workers_dev = true
 
-# 统一身份认证中心 (myauth) 环境变量
+# 统一身份认证与个人网盘 Master Key 环境变量
 [vars]
+MASTER_KEY = "mylog-master-key"
 AUTH_HUB_URL = "https://bigmax.dpdns.org"
 MYAUTH_APP_ID = "app_mylog"
 MYAUTH_CLIENT_SECRET = "sec_ee78fe3728e742a4a40d825f"

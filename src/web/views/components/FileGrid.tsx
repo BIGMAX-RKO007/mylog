@@ -30,8 +30,10 @@ export const FileGrid: FC<FileGridProps> = ({ files, session }) => {
             <line x1="9" y1="17" x2="13" y2="17" />
           </svg>
         </div>
-        <h3 class="empty-title">未检索到匹配的 Markdown 文档</h3>
-        <p class="empty-subtitle">尝试更换分类或调整搜索关键词，或点击右上角上传新文档</p>
+        <h3 class="empty-title">{session ? '个人网盘暂无匹配文件' : '暂无公开技术笔记'}</h3>
+        <p class="empty-subtitle">
+          {session ? '可更换筛选条件，或点击右下角上传文件至您的私有网盘' : '站点目前未发布该分类下的公开文档'}
+        </p>
       </div>
     );
   }
@@ -39,7 +41,6 @@ export const FileGrid: FC<FileGridProps> = ({ files, session }) => {
   return (
     <div class="bento-grid">
       {files.map((file, index) => {
-        // Bento 非对称排版策略：首张或每隔 5 张呈现为跨两列的 Hero 卡片，第 4 张呈现为宽版 Wide 卡片，其余为精致 Square 卡片
         let bentoVariant = 'bento-square';
         if (index % 5 === 0) {
           bentoVariant = 'bento-hero';
@@ -48,19 +49,31 @@ export const FileGrid: FC<FileGridProps> = ({ files, session }) => {
         }
 
         const extMatch = file.name.match(/\.([a-zA-Z0-9]+)$/);
-        const displayExt = extMatch ? `.${extMatch[1].toUpperCase()}` : '.MD';
+        const ext = extMatch ? extMatch[1].toLowerCase() : 'md';
+        const displayExt = `.${ext.toUpperCase()}`;
+
+        // 格式色彩分类
+        let badgeColorClass = 'badge-fmt-default';
+        if (['pptx', 'ppt'].includes(ext)) badgeColorClass = 'badge-fmt-ppt';
+        else if (['pdf'].includes(ext)) badgeColorClass = 'badge-fmt-pdf';
+        else if (['docx', 'doc'].includes(ext)) badgeColorClass = 'badge-fmt-word';
+        else if (['xlsx', 'xls', 'csv'].includes(ext)) badgeColorClass = 'badge-fmt-excel';
+        else if (['zip', 'rar', '7z', 'tar', 'gz'].includes(ext)) badgeColorClass = 'badge-fmt-archive';
 
         return (
-          <a
+          <div
             key={file.id}
             id={`file-card-${file.id}`}
-            href={`/files/${file.id}`}
             class={`bento-card ${bentoVariant}`}
+            role="link"
+            tabIndex={0}
+            onclick={`if (!event.target.closest('button, a')) { window.location.href = '/files/${file.id}'; }`}
+            onkeydown={`if (event.key === 'Enter' && !event.target.closest('button, a')) { window.location.href = '/files/${file.id}'; }`}
           >
-            {/* 卡片顶部行：文件格式徽章与权限状态胶囊 */}
+            {/* 卡片顶部行：文件格式徽章、操作按纽与状态胶囊 */}
             <div class="card-header-row">
-              <div class="file-type-badge">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+              <div class={`file-type-badge ${badgeColorClass}`}>
+                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                   <polyline points="14 2 14 8 20 8" />
                 </svg>
@@ -68,36 +81,65 @@ export const FileGrid: FC<FileGridProps> = ({ files, session }) => {
               </div>
 
               <div class="card-status-badges">
-                {file.ownerRoleId === 'rol_public' ? (
-                  <span class="status-pill status-guest">
-                    <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
-                      <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4z" />
-                    </svg>
-                    游客
-                  </span>
+                {/* 直接下载原始文件按钮 */}
+                <a
+                  href={`/files/${file.id}/download`}
+                  class="card-share-icon-btn card-download-btn"
+                  title="下载原始文件"
+                  onclick="event.stopPropagation();"
+                  download={file.name}
+                >
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                </a>
+
+                {/* 状态徽章 (Master 点击可快速切换公开/私有) */}
+                {session ? (
+                  <button
+                    type="button"
+                    class={`status-pill ${file.isPublic ? 'status-public' : 'status-private'}`}
+                    title={file.isPublic ? "公开文件 (点击设为私有)" : "私有文件 (点击设为公开)"}
+                    onclick="event.stopPropagation(); event.preventDefault();"
+                    hx-post={`/files/${file.id}/toggle-public`}
+                    hx-target={`#file-card-${file.id}`}
+                    hx-swap="outerHTML"
+                  >
+                    {file.isPublic ? (
+                      <>
+                        <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
+                          <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+                          <path d="M1 8h14M8 1a10 10 0 0 1 0 14M8 1a10 10 0 0 0 0 14" fill="none" stroke="currentColor" stroke-width="1.2" />
+                        </svg>
+                        <span>公开</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
+                          <rect x="3" y="6" width="10" height="9" rx="2" />
+                          <path d="M5 6V4a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.5" />
+                        </svg>
+                        <span>私有</span>
+                      </>
+                    )}
+                  </button>
                 ) : file.isPublic ? (
                   <span class="status-pill status-public">
                     <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
                       <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
                       <path d="M1 8h14M8 1a10 10 0 0 1 0 14M8 1a10 10 0 0 0 0 14" fill="none" stroke="currentColor" stroke-width="1.2" />
                     </svg>
-                    公开
+                    <span>公开</span>
                   </span>
-                ) : (
-                  <span class="status-pill status-private">
-                    <svg viewBox="0 0 16 16" width="11" height="11" fill="currentColor">
-                      <rect x="3" y="6" width="10" height="9" rx="2" />
-                      <path d="M5 6V4a3 3 0 0 1 6 0v2" fill="none" stroke="currentColor" stroke-width="1.5" />
-                    </svg>
-                    私有
-                  </span>
-                )}
+                ) : null}
 
                 {/* 快捷复制分享链接 */}
                 <button
                   type="button"
                   class="card-share-icon-btn"
-                  title={file.isPublic ? "复制公开文档链接" : "复制文档链接 (仅授权可见)"}
+                  title="复制链接"
                   onclick={`
                     event.stopPropagation();
                     event.preventDefault();
@@ -119,15 +161,15 @@ export const FileGrid: FC<FileGridProps> = ({ files, session }) => {
                   </svg>
                 </button>
 
-                {/* 登录用户展示快捷删除按钮 */}
+                {/* Master 展示删除按钮 */}
                 {session && (
                   <button
                     type="button"
                     class="card-delete-icon-btn"
-                    title="彻底删除此文档"
+                    title="彻底删除此文件"
                     onclick="event.stopPropagation(); event.preventDefault();"
                     hx-delete={`/files/${file.id}`}
-                    hx-confirm={`确定要彻底删除文档「${file.title || file.name}」吗？删除后将不可恢复。`}
+                    hx-confirm={`确定要从个人网盘彻底删除「${file.title || file.name}」吗？`}
                     hx-target="#drive-main-container"
                     hx-swap="outerHTML"
                   >
@@ -202,7 +244,7 @@ export const FileGrid: FC<FileGridProps> = ({ files, session }) => {
                 <span>{formatBytes(file.size)}</span>
               </div>
             </div>
-          </a>
+          </div>
         );
       })}
     </div>
