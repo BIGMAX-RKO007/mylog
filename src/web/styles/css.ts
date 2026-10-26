@@ -1265,6 +1265,60 @@ body, .app-body {
   color: var(--warm-orange);
 }
 
+/* 纯粹极简伪装空屏 (Guest Zen Stealth Hero) */
+.stealth-empty-hero {
+  min-height: 55vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  cursor: default;
+  user-select: none;
+}
+
+.stealth-ambient-glow {
+  position: absolute;
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, rgba(249, 115, 22, 0.08) 0%, rgba(14, 165, 233, 0.04) 50%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(40px);
+}
+
+.stealth-center-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  z-index: 1;
+}
+
+.stealth-logo-svg {
+  filter: drop-shadow(0 4px 16px rgba(249, 115, 22, 0.25));
+  margin-bottom: 1.25rem;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.stealth-empty-hero:hover .stealth-logo-svg {
+  transform: scale(1.08) rotate(-4deg);
+}
+
+.stealth-title {
+  font-size: 2.2rem;
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  color: var(--text-title);
+  margin-bottom: 0.6rem;
+}
+
+.stealth-desc {
+  font-size: 0.95rem;
+  color: var(--text-muted);
+  max-width: 360px;
+  line-height: 1.6;
+}
+
 .dropzone {
   border: 2px dashed var(--card-border);
   border-radius: var(--radius-md);

@@ -11,7 +11,7 @@ import { AppContext } from '../../core/types';
 
 export const fileRoutes = new Hono<AppContext>();
 
-// 1. 网盘首页 (未登录浏览公开知识库，登录展示全部管理资源)
+// 1. 网盘首页 (普通访客访问：什么都不显示；Master 解锁后呈现完整私有网盘)
 fileRoutes.get('/', async (c) => {
   const session = c.get('session');
   const { documentService } = c.get('services');
@@ -19,12 +19,20 @@ fileRoutes.get('/', async (c) => {
   const q = c.req.query('q');
   const tag = c.req.query('tag');
 
-  const [searchResult, popularTags] = await Promise.all([
-    documentService.search(q, session?.userId, tag, sort),
-    documentService.listPopularTags(20),
-  ]);
+  let files: any[] = [];
+  let popularTags: { name: string; count: number }[] = [];
+  let expandedKeywords: string[] = [];
 
-  const files = searchResult.files;
+  // 严格隐私策略：普通访客访问时，绝不查询、绝不泄露任何文档或标签，保持纯白伪装
+  if (session) {
+    const [searchResult, tags] = await Promise.all([
+      documentService.search(q, session?.userId, tag, sort),
+      documentService.listPopularTags(20),
+    ]);
+    files = searchResult.files;
+    popularTags = tags;
+    expandedKeywords = searchResult.expandedKeywords || [];
+  }
 
   if (c.req.header('HX-Request') && c.req.header('HX-Target') === 'drive-main-container') {
     return c.html(
@@ -34,7 +42,7 @@ fileRoutes.get('/', async (c) => {
         searchQuery={q}
         popularTags={popularTags}
         selectedTag={tag}
-        expandedKeywords={searchResult.expandedKeywords}
+        expandedKeywords={expandedKeywords}
         session={session}
       />
     );
@@ -47,7 +55,7 @@ fileRoutes.get('/', async (c) => {
       searchQuery={q}
       popularTags={popularTags}
       selectedTag={tag}
-      expandedKeywords={searchResult.expandedKeywords}
+      expandedKeywords={expandedKeywords}
       session={session}
     />
   );
@@ -94,6 +102,11 @@ fileRoutes.get('/files', async (c) => {
     }
 
     // 伪装策略：暗号错误时不给任何提示，假装普通查询且无结果，完全不暴露暗门机制
+    return c.html(<FileGrid files={[]} session={undefined} />);
+  }
+
+  // 普通访客访问时，什么都不显示
+  if (!session) {
     return c.html(<FileGrid files={[]} session={undefined} />);
   }
 
@@ -184,6 +197,17 @@ fileRoutes.get('/files/:id', async (c) => {
   if (!fileId) return c.text('缺少文件ID', 400);
 
   const session = c.get('session');
+  // 普通访客访问直接返回 404，绝不泄露任何文件
+  if (!session) {
+    return c.html(
+      <div style="padding: 4rem 1rem; text-align: center; color: var(--text-muted);">
+        <h2>404 Not Found</h2>
+        <p style="margin-top: 0.5rem; font-size: 0.9rem;">未找到该文档或无权查看</p>
+      </div>,
+      404
+    );
+  }
+
   const userId = session?.userId;
   const isMaster = !!session?.isMaster || session?.roles?.includes('rol_accountadmin');
   const { documentService } = c.get('services');
@@ -231,6 +255,10 @@ fileRoutes.get('/files/:id/download', async (c) => {
   if (!fileId) return c.text('缺少文件ID', 400);
 
   const session = c.get('session');
+  if (!session) {
+    return c.text('Not Found', 404);
+  }
+
   const isMaster = !!session?.isMaster || session?.roles?.includes('rol_accountadmin');
   const { documentService } = c.get('services');
 
@@ -250,6 +278,9 @@ fileRoutes.get('/files/:id/raw', async (c) => {
   if (!fileId) return c.text('缺少文件ID', 400);
 
   const session = c.get('session');
+  if (!session) {
+    return c.text('Not Found', 404);
+  }
   const userId = session?.userId;
   const isMaster = !!session?.isMaster || session?.roles?.includes('rol_accountadmin');
   const { documentService } = c.get('services');

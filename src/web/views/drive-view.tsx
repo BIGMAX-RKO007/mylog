@@ -140,30 +140,33 @@ export const DriveView: FC<DrivePageProps> = ({
             </a>
           </div>
 
-          {/* 中部：醒目大气的毛玻璃居中全宽搜索框 (兼极客暗门激活入口) */}
-          <div class="header-center">
-            <div class="bento-search-box">
-              <svg class="search-lens-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                id="file-search-input"
-                type="search"
-                name="q"
-                class="bento-search-input"
-                placeholder={session ? "搜索网盘文件、标题、标签，或输入 :lock 锁定..." : "搜索公开技术笔记与文档..."}
-                value={searchQuery}
-                hx-get="/files"
-                hx-trigger="keyup changed delay:250ms, search, keydown[key=='Enter']"
-                hx-target="#file-grid-container"
-                hx-include="#current-sort-id, #current-tag-id"
-                hx-swap="innerHTML"
-              />
-
-              <span class="search-kbd-pill" title="按回车即刻检索">Enter</span>
+          {/* 中部：仅在 Master 解锁网盘后展示搜索框 */}
+          {session ? (
+            <div class="header-center">
+              <div class="bento-search-box">
+                <svg class="search-lens-svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <input
+                  id="file-search-input"
+                  type="search"
+                  name="q"
+                  class="bento-search-input"
+                  placeholder="搜索网盘文件、标题、标签，或输入 :lock 锁定..."
+                  value={searchQuery}
+                  hx-get="/files"
+                  hx-trigger="keyup changed delay:250ms, search, keydown[key=='Enter']"
+                  hx-target="#file-grid-container"
+                  hx-include="#current-sort-id, #current-tag-id"
+                  hx-swap="innerHTML"
+                />
+                <span class="search-kbd-pill" title="按回车即刻检索">Enter</span>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div class="header-center"></div>
+          )}
 
           {/* 右上角：纯粹伪装模式 (未登录时不放任何登录/注册入口，仅暗门解锁后才显示 Master 状态) */}
           <div class="header-right">
@@ -183,22 +186,7 @@ export const DriveView: FC<DrivePageProps> = ({
               </svg>
             </button>
 
-            {/* 未登录时的隐蔽暗门微按钮 (快捷键: Ctrl+Shift+L) */}
-            {!session && (
-              <button
-                type="button"
-                class="stealth-gate-btn"
-                onclick="window.toggleMasterUnlockModal && window.toggleMasterUnlockModal(true)"
-                title="Master 专属暗门 (快捷键: Ctrl+Shift+L)"
-              >
-                <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-              </button>
-            )}
-
-            {session ? (
+            {session && (
               <div class="user-top-profile">
                 <span class="master-status-pill" title="已解锁个人私有网盘">⚡ Master</span>
                 <a href="/logout" class="quick-logout-btn" title="锁定并退出 (返回只读伪装)">
@@ -209,7 +197,7 @@ export const DriveView: FC<DrivePageProps> = ({
                   <span>锁定</span>
                 </a>
               </div>
-            ) : null}
+            )}
           </div>
         </div>
       </header>
@@ -220,128 +208,165 @@ export const DriveView: FC<DrivePageProps> = ({
 
       {/* 2. 主体舞台 (Main Bento Stage) */}
       <main class="bento-main-stage">
-        {/* 分类筛选与排序控制中枢 */}
-        <section class="bento-control-hub">
-          {/* AI 意图理解联想词浮现提示条 */}
-          {expandedKeywords && expandedKeywords.length > 0 && (
-            <div class="ai-expansion-banner">
-              <span class="banner-sparkle">💡</span>
-              <span class="banner-title">智能管理员联想关联领域：</span>
-              <div class="banner-keyword-pills">
-                {expandedKeywords.map((kw) => (
-                  <span key={kw} class="expanded-kw-pill">
-                    {kw}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 热门智能标签横向胶囊墙 (知识库主维度) */}
-          {popularTags && popularTags.length > 0 && (
-            <div class="tags-ribbon-container">
-              <span class="tags-ribbon-hint">
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
-                  <line x1="7" y1="7" x2="7.01" y2="7" />
-                </svg>
-                <span>标签集：</span>
-              </span>
-
-              {selectedTag && (
-                <a
-                  href={`/?sort=${selectedSort}`}
-                  class="tag-pill-chip active-tag-pill"
-                  title="点击取消此标签筛选"
-                  hx-get={`/?sort=${selectedSort}`}
-                  hx-target="#drive-main-container"
-                  hx-swap="outerHTML"
-                  hx-push-url="true"
-                >
-                  <span>#{selectedTag}</span>
-                  <span class="tag-close-x">✕</span>
-                </a>
-              )}
-
-              {popularTags
-                .filter((pt) => pt.name !== selectedTag)
-                .slice(0, 15)
-                .map((pt) => (
-                  <a
-                    key={pt.name}
-                    href={`/?tag=${encodeURIComponent(pt.name)}&sort=${selectedSort}`}
-                    class="tag-pill-chip"
-                    hx-get={`/?tag=${encodeURIComponent(pt.name)}&sort=${selectedSort}`}
-                    hx-target="#drive-main-container"
-                    hx-swap="outerHTML"
-                    hx-push-url="true"
-                  >
-                    <span>#{pt.name}</span>
-                    <span class="tag-count">{pt.count}</span>
-                  </a>
-                ))}
-            </div>
-          )}
-
-          {/* 状态统计与排序控制器 */}
-          <div class="bento-filter-row">
-            <div class="filter-row-left">
-              <span class="stage-tag">{selectedTag ? `#${selectedTag}` : '全部知识库'}</span>
-              <span class="doc-counter">共 <strong>{files.length}</strong> 篇文档</span>
-            </div>
-
-            <div class="filter-row-right">
-              <div class="bento-sort-toggle">
-                <button
-                  type="button"
-                  id="sort-btn-views"
-                  class={`sort-pill ${selectedSort === 'views' ? 'active' : ''}`}
-                  onclick="
-                    document.getElementById('current-sort-id').value = 'views';
-                    document.getElementById('sort-btn-views').classList.add('active');
-                    document.getElementById('sort-btn-latest').classList.remove('active');
-                  "
-                  hx-get="/files?sort=views"
-                  hx-include="#current-tag-id, #file-search-input"
-                  hx-target="#file-grid-container"
-                  hx-swap="innerHTML"
-                >
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="#f97316">
-                    <path d="M12 2C10.5 4.5 9 6.8 9 9.5C9 12.8 11.2 14.5 12 15C12.8 14.5 15 12.8 15 9.5C15 6.8 13.5 4.5 12 2Z" fill="#f97316"/>
-                    <path d="M12 22C6.5 22 3 17.5 3 12.5C3 8.2 6.2 5.1 8 3.5C8.3 4.8 8.9 6.2 9.8 7.3C10.8 8.5 12.1 9.4 12.5 11C13.2 9.8 13.8 8.4 14 7C16.5 9.2 19 12.2 19 15.5C19 19.5 16 22 12 22Z" stroke="#ea580c" stroke-width="1.8"/>
-                  </svg>
-                  <span>点击榜</span>
-                </button>
-
-                <button
-                  type="button"
-                  id="sort-btn-latest"
-                  class={`sort-pill ${selectedSort !== 'views' ? 'active' : ''}`}
-                  onclick="
-                    document.getElementById('current-sort-id').value = 'latest';
-                    document.getElementById('sort-btn-latest').classList.add('active');
-                    document.getElementById('sort-btn-views').classList.remove('active');
-                  "
-                  hx-get="/files?sort=latest"
-                  hx-include="#current-tag-id, #file-search-input"
-                  hx-target="#file-grid-container"
-                  hx-swap="innerHTML"
-                >
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="12 6 12 12 16 14" />
-                  </svg>
-                  <span>最新</span>
-                </button>
-              </div>
+        {!session ? (
+          /* 普通访客访问：什么都不显示，极致简约纯净伪装 */
+          <div
+            class="stealth-empty-hero"
+            ondblclick="window.toggleMasterUnlockModal && window.toggleMasterUnlockModal(true)"
+            title="双击唤出 Master 密钥暗门"
+          >
+            <div class="stealth-ambient-glow"></div>
+            <div class="stealth-center-box">
+              <svg class="stealth-logo-svg" viewBox="0 0 24 24" width="56" height="56" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                  <linearGradient id="stealthGradHero" x1="0%" y1="100%" x2="100%" y2="0%">
+                    <stop offset="0%" stop-color="#ea580c" />
+                    <stop offset="55%" stop-color="#f97316" />
+                    <stop offset="100%" stop-color="#0ea5e9" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M12 2C10.5 4.5 9 6.8 9 9.5C9 12.8 11.2 14.5 12 15C12.8 14.5 15 12.8 15 9.5C15 6.8 13.5 4.5 12 2Z"
+                  fill="#f97316"
+                  opacity="0.85"
+                />
+                <path
+                  d="M12 22C6.5 22 3 17.5 3 12.5C3 8.2 6.2 5.1 8 3.5C8.3 4.8 8.9 6.2 9.8 7.3C10.8 8.5 12.1 9.4 12.5 11C13.2 9.8 13.8 8.4 14 7C16.5 9.2 19 12.2 19 15.5C19 19.5 16 22 12 22Z"
+                  stroke="url(#stealthGradHero)"
+                  stroke-width="2"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <h1 class="stealth-title">mylog</h1>
+              <p class="stealth-desc">个人专属私有空间 · 暂未发布公开内容</p>
             </div>
           </div>
-        </section>
+        ) : (
+          <>
+            {/* 分类筛选与排序控制中枢 */}
+            <section class="bento-control-hub">
+              {/* AI 意图理解联想词浮现提示条 */}
+              {expandedKeywords && expandedKeywords.length > 0 && (
+                <div class="ai-expansion-banner">
+                  <span class="banner-sparkle">💡</span>
+                  <span class="banner-title">智能管理员联想关联领域：</span>
+                  <div class="banner-keyword-pills">
+                    {expandedKeywords.map((kw) => (
+                      <span key={kw} class="expanded-kw-pill">
+                        {kw}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-        {/* 3. 便当盒非对称卡片展示区 (Bento Box Grid) */}
-        <section id="file-grid-container" class="bento-viewport">
-          <FileGrid files={files} session={session} />
-        </section>
+              {/* 热门智能标签横向胶囊墙 (知识库主维度) */}
+              {popularTags && popularTags.length > 0 && (
+                <div class="tags-ribbon-container">
+                  <span class="tags-ribbon-hint">
+                    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" />
+                      <line x1="7" y1="7" x2="7.01" y2="7" />
+                    </svg>
+                    <span>标签集：</span>
+                  </span>
+
+                  {selectedTag && (
+                    <a
+                      href={`/?sort=${selectedSort}`}
+                      class="tag-pill-chip active-tag-pill"
+                      title="点击取消此标签筛选"
+                      hx-get={`/?sort=${selectedSort}`}
+                      hx-target="#drive-main-container"
+                      hx-swap="outerHTML"
+                      hx-push-url="true"
+                    >
+                      <span>#{selectedTag}</span>
+                      <span class="tag-close-x">✕</span>
+                    </a>
+                  )}
+
+                  {popularTags
+                    .filter((pt) => pt.name !== selectedTag)
+                    .slice(0, 15)
+                    .map((pt) => (
+                      <a
+                        key={pt.name}
+                        href={`/?tag=${encodeURIComponent(pt.name)}&sort=${selectedSort}`}
+                        class="tag-pill-chip"
+                        hx-get={`/?tag=${encodeURIComponent(pt.name)}&sort=${selectedSort}`}
+                        hx-target="#drive-main-container"
+                        hx-swap="outerHTML"
+                        hx-push-url="true"
+                      >
+                        <span>#{pt.name}</span>
+                        <span class="tag-count">{pt.count}</span>
+                      </a>
+                    ))}
+                </div>
+              )}
+
+              {/* 状态统计与排序控制器 */}
+              <div class="bento-filter-row">
+                <div class="filter-row-left">
+                  <span class="stage-tag">{selectedTag ? `#${selectedTag}` : '全部知识库'}</span>
+                  <span class="doc-counter">共 <strong>{files.length}</strong> 篇文档</span>
+                </div>
+
+                <div class="filter-row-right">
+                  <div class="bento-sort-toggle">
+                    <button
+                      type="button"
+                      id="sort-btn-views"
+                      class={`sort-pill ${selectedSort === 'views' ? 'active' : ''}`}
+                      onclick="
+                        document.getElementById('current-sort-id').value = 'views';
+                        document.getElementById('sort-btn-views').classList.add('active');
+                        document.getElementById('sort-btn-latest').classList.remove('active');
+                      "
+                      hx-get="/files?sort=views"
+                      hx-include="#current-tag-id, #file-search-input"
+                      hx-target="#file-grid-container"
+                      hx-swap="innerHTML"
+                    >
+                      <svg viewBox="0 0 24 24" width="13" height="13" fill="#f97316">
+                        <path d="M12 2C10.5 4.5 9 6.8 9 9.5C9 12.8 11.2 14.5 12 15C12.8 14.5 15 12.8 15 9.5C15 6.8 13.5 4.5 12 2Z" fill="#f97316"/>
+                        <path d="M12 22C6.5 22 3 17.5 3 12.5C3 8.2 6.2 5.1 8 3.5C8.3 4.8 8.9 6.2 9.8 7.3C10.8 8.5 12.1 9.4 12.5 11C13.2 9.8 13.8 8.4 14 7C16.5 9.2 19 12.2 19 15.5C19 19.5 16 22 12 22Z" stroke="#ea580c" stroke-width="1.8"/>
+                      </svg>
+                      <span>点击榜</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      id="sort-btn-latest"
+                      class={`sort-pill ${selectedSort !== 'views' ? 'active' : ''}`}
+                      onclick="
+                        document.getElementById('current-sort-id').value = 'latest';
+                        document.getElementById('sort-btn-latest').classList.add('active');
+                        document.getElementById('sort-btn-views').classList.remove('active');
+                      "
+                      hx-get="/files?sort=latest"
+                      hx-include="#current-tag-id, #file-search-input"
+                      hx-target="#file-grid-container"
+                      hx-swap="innerHTML"
+                    >
+                      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <polyline points="12 6 12 12 16 14" />
+                      </svg>
+                      <span>最新</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            {/* 便当盒非对称卡片展示区 (Bento Box Grid) */}
+            <section id="file-grid-container" class="bento-viewport">
+              <FileGrid files={files} session={session} />
+            </section>
+          </>
+        )}
       </main>
 
       {/* 4. 伪装极简页脚 */}
