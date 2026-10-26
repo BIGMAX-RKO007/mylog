@@ -2,6 +2,7 @@ import { FC } from 'hono/jsx';
 import { Layout } from './layout';
 import { FileGrid } from './components/FileGrid';
 import { FileViewer } from './components/FileViewer';
+import { AiChatDrawer } from './components/AiChatDrawer';
 import { DocumentMetadata, ParsedDocument } from '../../services/document-service';
 import { UserSession } from '../../core/types';
 
@@ -478,22 +479,25 @@ export const DriveView: FC<DrivePageProps> = ({
         </div>
       )}
 
-      {/* 6. 仅在 Master 解锁网盘时显示上传悬浮按钮 (未登录时完全不渲染，实现绝对伪装) */}
+      {/* 6. 仅在 Master 解锁网盘时显示上传悬浮按钮与 AI 灵感随想浮窗 (未登录时完全不渲染，实现绝对伪装) */}
       {session && (
-        <button
-          class="fab-upload"
-          title="上传文件至个人网盘 (支持 PPT/PPTX、Office、PDF、代码及各类二进制文件)"
-          hx-get="/files/upload-modal"
-          hx-target="#modal-container"
-          hx-swap="innerHTML"
-        >
-          <span class="fab-glow-aura"></span>
-          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4">
-            <line x1="12" y1="5" x2="12" y2="19" />
-            <line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          <span class="fab-label">上传至网盘</span>
-        </button>
+        <>
+          <AiChatDrawer />
+          <button
+            class="fab-upload"
+            title="上传文件至个人网盘 (支持 PPT/PPTX、Office、PDF、代码及各类二进制文件)"
+            hx-get="/files/upload-modal"
+            hx-target="#modal-container"
+            hx-swap="innerHTML"
+          >
+            <span class="fab-glow-aura"></span>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span class="fab-label">上传至网盘</span>
+          </button>
+        </>
       )}
 
       {/* 7. 暗门激活与全局快捷键脚本 */}

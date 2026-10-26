@@ -517,6 +517,22 @@ ${preview}`;
     };
   }
 
+  /**
+   * 直接将生成的 Markdown 文本存入个人网盘 (包含原文件 BLOB 与 AI 标签提取)
+   */
+  async saveMarkdownNote(
+    title: string,
+    markdown: string,
+    ownerRoleId: string = 'rol_accountadmin',
+    creatorUserId: string = 'usr_master',
+    isPublic: boolean = false
+  ): Promise<DocumentMetadata> {
+    const rawBuffer = new TextEncoder().encode(markdown).buffer as ArrayBuffer;
+    const fileName = title.endsWith('.md') ? title : `${title}.md`;
+    const preview = await this.previewUpload(fileName, markdown, rawBuffer);
+    return this.commitDocument(preview.uploadToken, ownerRoleId, creatorUserId, isPublic);
+  }
+
   // -------------------------------------------------------------
   // 文档阅读与内容拉取
   // -------------------------------------------------------------

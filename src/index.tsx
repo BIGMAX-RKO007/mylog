@@ -7,6 +7,7 @@ import { DocumentService } from './services/document-service';
 import { authRoutes } from './web/routes/auth-routes';
 import { fileRoutes } from './web/routes/file-routes';
 import { adminRbacRoutes } from './web/routes/admin-rbac-routes';
+import { aiChatRoutes } from './web/routes/ai-chat-routes';
 import { ssoSessionMiddleware } from './web/middleware/edge-auth-guard';
 import { MAIN_CSS } from './web/styles/css';
 
@@ -42,10 +43,11 @@ app.use('*', async (c, next) => {
   return ssoSessionMiddleware(c, next);
 });
 
-// 3. 挂载认证、文档与权限中心业务路由
+// 3. 挂载认证、文档、AI 灵感随想与权限中心业务路由
 app.route('/', authRoutes);
 app.route('/', fileRoutes);
 app.route('/', adminRbacRoutes);
+app.route('/', aiChatRoutes);
 
 // 4. 基础设施健康与真机验证诊断接口 (用于确凿验证 AI 与 Vectorize)
 app.get('/api/health-infra', async (c) => {
