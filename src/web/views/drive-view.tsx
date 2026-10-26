@@ -3,6 +3,7 @@ import { Layout } from './layout';
 import { FileGrid } from './components/FileGrid';
 import { FileViewer } from './components/FileViewer';
 import { AiChatDrawer } from './components/AiChatDrawer';
+import { GalleryCarousel } from './components/GalleryCarousel';
 import { DocumentMetadata, ParsedDocument } from '../../services/document-service';
 import { UserSession } from '../../core/types';
 
@@ -137,7 +138,7 @@ export const DriveView: FC<DrivePageProps> = ({
                 />
               </svg>
               <span class="brand-name">mylog</span>
-              <span class="bento-badge">Bento</span>
+              <span class="bento-badge">{session ? 'Bento' : 'Gallery'}</span>
             </a>
           </div>
 
@@ -207,41 +208,11 @@ export const DriveView: FC<DrivePageProps> = ({
       <input type="hidden" id="current-sort-id" name="sort" value={selectedSort} />
       <input type="hidden" id="current-tag-id" name="tag" value={selectedTag} />
 
-      {/* 2. 主体舞台 (Main Bento Stage) */}
+      {/* 2. 主体舞台 (Main Bento Stage / Gallery Stage) */}
       <main class="bento-main-stage">
         {!session ? (
-          /* 普通访客访问：什么都不显示，极致简约纯净伪装 */
-          <div
-            class="stealth-empty-hero"
-            ondblclick="window.toggleMasterUnlockModal && window.toggleMasterUnlockModal(true)"
-            title="双击唤出 Master 密钥暗门"
-          >
-            <div class="stealth-ambient-glow"></div>
-            <div class="stealth-center-box">
-              <svg class="stealth-logo-svg" viewBox="0 0 24 24" width="56" height="56" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                  <linearGradient id="stealthGradHero" x1="0%" y1="100%" x2="100%" y2="0%">
-                    <stop offset="0%" stop-color="#ea580c" />
-                    <stop offset="55%" stop-color="#f97316" />
-                    <stop offset="100%" stop-color="#0ea5e9" />
-                  </linearGradient>
-                </defs>
-                <path
-                  d="M12 2C10.5 4.5 9 6.8 9 9.5C9 12.8 11.2 14.5 12 15C12.8 14.5 15 12.8 15 9.5C15 6.8 13.5 4.5 12 2Z"
-                  fill="#f97316"
-                  opacity="0.85"
-                />
-                <path
-                  d="M12 22C6.5 22 3 17.5 3 12.5C3 8.2 6.2 5.1 8 3.5C8.3 4.8 8.9 6.2 9.8 7.3C10.8 8.5 12.1 9.4 12.5 11C13.2 9.8 13.8 8.4 14 7C16.5 9.2 19 12.2 19 15.5C19 19.5 16 22 12 22Z"
-                  stroke="url(#stealthGradHero)"
-                  stroke-width="2"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              <h1 class="stealth-title">mylog</h1>
-              <p class="stealth-desc">个人专属私有空间 · 暂未发布公开内容</p>
-            </div>
-          </div>
+          /* 普通访客访问：画廊轮播伪装（4K 极简自然风景展） */
+          <GalleryCarousel />
         ) : (
           <>
             {/* 分类筛选与排序控制中枢 */}
@@ -373,17 +344,11 @@ export const DriveView: FC<DrivePageProps> = ({
       {/* 4. 伪装极简页脚 */}
       <footer class="bento-footer">
         <p>
-          <span>© {new Date().getFullYear()} mylog · 边缘云存储与 Bento 知识网盘</span>
-          {!session && (
-            <button
-              type="button"
-              class="footer-stealth-dot"
-              onclick="window.toggleMasterUnlockModal && window.toggleMasterUnlockModal(true)"
-              title="Master 密钥解锁"
-            >
-              ·
-            </button>
-          )}
+          <span>
+            {session
+              ? `© ${new Date().getFullYear()} mylog · 边缘云存储与 Bento 知识网盘`
+              : `© ${new Date().getFullYear()} mylog · Fine Art & Landscape Photography Gallery`}
+          </span>
         </p>
       </footer>
 

@@ -2682,5 +2682,229 @@ body, .app-body {
   background: rgba(139, 92, 246, 0.1) !important;
   border: 1px solid rgba(139, 92, 246, 0.25) !important;
 }
+
+/* ==========================================================================
+   画廊轮播伪装系统 (Zen Photography Gallery Carousel)
+   ========================================================================== */
+.gallery-hero-viewport {
+  position: relative;
+  width: 100%;
+  max-width: 1400px;
+  height: calc(100vh - 140px);
+  min-height: 580px;
+  max-height: 860px;
+  margin: 0 auto;
+  border-radius: 28px;
+  overflow: hidden;
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.45);
+  background-color: #0b0f19;
+  user-select: none;
+}
+
+.gallery-slides-wrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.gallery-slide-item {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(1);
+  transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1), transform 9s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.gallery-slide-item.active {
+  opacity: 1;
+  pointer-events: auto;
+  transform: scale(1.04);
+}
+
+.gallery-slide-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(11, 15, 25, 0.92) 0%, rgba(11, 15, 25, 0.45) 45%, rgba(11, 15, 25, 0.15) 100%);
+}
+
+.gallery-photo-meta {
+  position: absolute;
+  bottom: 3.5rem;
+  left: 3.5rem;
+  max-width: 720px;
+  z-index: 2;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  animation: slideMetaIn 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideMetaIn {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.gallery-location-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #38bdf8;
+  background: rgba(14, 165, 233, 0.15);
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  backdrop-filter: blur(8px);
+  width: fit-content;
+}
+
+.gallery-photo-title {
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  color: #ffffff;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+.gallery-photo-quote {
+  font-size: 1.05rem;
+  font-weight: 400;
+  color: rgba(241, 245, 249, 0.88);
+  font-style: italic;
+  line-height: 1.6;
+  max-width: 600px;
+}
+
+.gallery-exif-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  color: rgba(203, 213, 225, 0.8);
+  background: rgba(15, 23, 42, 0.6);
+  padding: 0.25rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  width: fit-content;
+  backdrop-filter: blur(6px);
+}
+
+.gallery-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gallery-nav-btn:hover {
+  background: rgba(15, 23, 42, 0.85);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: translateY(-50%) scale(1.1);
+}
+
+.gallery-nav-prev { left: 2rem; }
+.gallery-nav-next { right: 2rem; }
+
+.gallery-controls-bar {
+  position: absolute;
+  bottom: 3.5rem;
+  right: 3.5rem;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(12px);
+  padding: 0.6rem 1.1rem;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.gallery-dots-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.gallery-dot-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.gallery-dot-btn .dot-inner {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.35);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gallery-dot-btn.active .dot-inner {
+  width: 24px;
+  background: #38bdf8;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.6);
+}
+
+.gallery-counter-tag {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.counter-slash {
+  opacity: 0.4;
+}
+
+@media (max-width: 768px) {
+  .gallery-hero-viewport {
+    height: 72vh;
+    border-radius: 18px;
+  }
+  .gallery-photo-meta {
+    bottom: 2rem;
+    left: 1.5rem;
+    right: 1.5rem;
+  }
+  .gallery-photo-title {
+    font-size: 1.5rem;
+  }
+  .gallery-controls-bar {
+    bottom: 1.5rem;
+    right: 1.5rem;
+  }
+  .gallery-nav-btn {
+    display: none;
+  }
+}
 `;
 
