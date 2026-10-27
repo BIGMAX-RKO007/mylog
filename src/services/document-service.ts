@@ -604,8 +604,18 @@ ${preview}`;
     if (!row) throw new Error('文件内容缺失');
 
     let buffer: ArrayBuffer;
-    if (row.raw_data && row.raw_data.byteLength > 0) {
-      buffer = row.raw_data;
+    if (row.raw_data) {
+      if (Array.isArray(row.raw_data) && row.raw_data.length > 0) {
+        // D1 规范行为：BLOB 列在查询反序列化时返回为 number[] 数组
+        buffer = new Uint8Array(row.raw_data).buffer as ArrayBuffer;
+      } else if (row.raw_data instanceof ArrayBuffer && row.raw_data.byteLength > 0) {
+        buffer = row.raw_data;
+      } else if (ArrayBuffer.isView(row.raw_data) && (row.raw_data as any).byteLength > 0) {
+        const view = row.raw_data as ArrayBufferView;
+        buffer = view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength) as ArrayBuffer;
+      } else {
+        buffer = new TextEncoder().encode(row.content || '').buffer as ArrayBuffer;
+      }
     } else {
       buffer = new TextEncoder().encode(row.content || '').buffer as ArrayBuffer;
     }

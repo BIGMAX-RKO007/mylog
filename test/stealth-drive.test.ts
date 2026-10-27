@@ -46,9 +46,13 @@ class MockD1Database {
           },
           async run() {
             if (query.includes('INSERT INTO file_contents')) {
+              // 模拟 Cloudflare D1 真实行为：BLOB 列读取时返回为 number[] 数组
+              const rawData = params[2] instanceof ArrayBuffer
+                ? Array.from(new Uint8Array(params[2]))
+                : (ArrayBuffer.isView(params[2]) ? Array.from(new Uint8Array(params[2].buffer)) : params[2]);
               db.fileContents.set(params[0], {
                 content: params[1],
-                raw_data: params[2],
+                raw_data: rawData,
                 updated_at: params[3],
               });
             }
@@ -150,5 +154,31 @@ describe('Stealth Mode & Personal Cloud Drive Integration', () => {
     expect(downloaded.name).toBe('backup.zip');
     expect(downloaded.mimeType).toBe('application/zip');
     expect(new Uint8Array(downloaded.buffer)[0]).toBe(0x50);
+  });
+
+  it('should ensure Excel .xlsx files are downloaded as valid binary spreadsheets, not markdown text', async () => {
+    // 构造一个真实的 xlsx 格式二进制 (PK\x03\x04 zip 容器)
+    const zip = new JSZip();
+    zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>');
+    zip.file('xl/workbook.xml', '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"></workbook>');
+    const xlsxBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+
+    // 1. 转为预览 Markdown
+    const md = await DocumentConverter.convertToMarkdown('finance.xlsx', xlsxBuffer);
+    const preview = await docService.previewUpload('finance.xlsx', md, xlsxBuffer);
+    expect(preview.uploadToken).toBeDefined();
+
+    // 2. 存入 D1 (底层会将 BLOB 反序列化为 number[] 数组)
+    const meta = await docService.commitDocument(preview.uploadToken, 'rol_accountadmin', 'usr_master', false);
+
+    // 3. 原件下载
+    const downloaded = await docService.getRawFile(meta.id, true);
+    expect(downloaded.name).toBe('finance.xlsx');
+    expect(downloaded.mimeType).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+    // 4. 关键断言：下载出来的数据必须是 ArrayBuffer 且头部必须是标准 PK\x03\x04，绝不是 Markdown # 字符 (0x23)
+    const firstFourBytes = Array.from(new Uint8Array(downloaded.buffer).slice(0, 4));
+    expect(firstFourBytes).toEqual([0x50, 0x4b, 0x03, 0x04]);
+    expect(downloaded.buffer.byteLength).toBe(xlsxBuffer.byteLength);
   });
 });

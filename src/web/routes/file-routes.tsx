@@ -265,7 +265,8 @@ fileRoutes.get('/files/:id/download', async (c) => {
   try {
     const rawFile = await documentService.getRawFile(fileId, isMaster);
     c.header('Content-Type', rawFile.mimeType);
-    c.header('Content-Disposition', `attachment; filename="${encodeURIComponent(rawFile.name)}"`);
+    const encodedName = encodeURIComponent(rawFile.name);
+    c.header('Content-Disposition', `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`);
     return c.body(rawFile.buffer);
   } catch (err: any) {
     return c.text(err.message || '文件不存在或无权下载该文件 (403 Forbidden)', 403);
