@@ -464,6 +464,17 @@ ${preview}`;
       .bind(r2Key, rawMarkdown, rawData ? rawData.buffer : null, now)
       .run();
 
+    // 4.1 确保角色与用户在 D1 中存在，满足外键完整性约束
+    await this.db
+      .prepare('INSERT OR IGNORE INTO roles (id, name, description, is_system, created_at) VALUES (?, ?, ?, 1, ?)')
+      .bind(ownerRoleId, ownerRoleId.toUpperCase(), 'Auto-managed role', now)
+      .run();
+
+    await this.db
+      .prepare('INSERT OR IGNORE INTO users (id, username, password_hash, is_active, created_at) VALUES (?, ?, ?, 1, ?)')
+      .bind(creatorUserId, creatorUserId === 'usr_master' ? 'master' : creatorUserId, 'LOCKED', now)
+      .run();
+
     // 5. 创建 securable_objects 记录
     await this.db
       .prepare('INSERT INTO securable_objects (id, object_type, owner_role_id, created_at) VALUES (?, ?, ?, ?)')
